@@ -1460,8 +1460,18 @@ export function App() {
                     className={track.id === currentTrack?.id ? 'track-row active' : 'track-row'}
                     key={track.id}
                     onClick={() => selectTrack(track)}
+                    onDoubleClick={() => selectTrack(track, { keepPlaying: true })}
                   >
-                    <TrackArtwork className="cover-chip" track={track} />
+                    <span className="track-cover">
+                      <TrackArtwork className="cover-chip" track={track} />
+                      {track.id === currentTrack?.id && isPlaying ? (
+                        <span aria-hidden="true" className="playing-bars">
+                          <i />
+                          <i />
+                          <i />
+                        </span>
+                      ) : null}
+                    </span>
                     <div>
                       <strong>{track.title}</strong>
                       <span>{getTrackSubtitle(track)}</span>

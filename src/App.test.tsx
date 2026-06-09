@@ -305,6 +305,17 @@ describe('App shell', () => {
     expect(screen.getByLabelText('已下载')).toBeInTheDocument();
   });
 
+  it('plays a library track immediately on double click and marks it as playing', () => {
+    render(<App />);
+
+    const row = within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /晴夜漫游/ });
+    fireEvent.doubleClick(row);
+
+    expect(within(screen.getByLabelText('当前播放')).getByRole('heading', { name: '晴夜漫游' })).toBeInTheDocument();
+    expect(screen.getByLabelText('暂停')).toBeInTheDocument();
+    expect(document.querySelector('.playing-bars')).toBeInTheDocument();
+  });
+
   it('renders real cover artwork when a track provides coverUrl', () => {
     render(<App />);
 
