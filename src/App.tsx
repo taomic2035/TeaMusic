@@ -22,6 +22,7 @@ import {
   Timer,
   Upload,
   Volume2,
+  VolumeX,
   X,
 } from 'lucide-react';
 import { ChangeEvent, CSSProperties, DragEvent, useEffect, useMemo, useRef, useState } from 'react';
@@ -483,6 +484,7 @@ export function App() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const localFileInputRef = useRef<HTMLInputElement>(null);
   const nowPlayingLyricsRef = useRef<HTMLDivElement>(null);
+  const preMuteVolumeRef = useRef(70);
 
   const recentTracks = useMemo(
     () =>
@@ -1048,6 +1050,20 @@ export function App() {
     }
   }
 
+  function adjustVolume(delta: number) {
+    handleVolumeChange(Math.min(Math.max(volume + delta, 0), 100));
+  }
+
+  function toggleMute() {
+    if (volume > 0) {
+      preMuteVolumeRef.current = volume;
+      handleVolumeChange(0);
+      return;
+    }
+
+    handleVolumeChange(preMuteVolumeRef.current > 0 ? preMuteVolumeRef.current : 70);
+  }
+
   function handleSeekChange(nextTime: number) {
     const boundedTime = Math.min(Math.max(nextTime, 0), playbackTime.duration);
     setPlaybackTime((existingTime) => ({ ...existingTime, current: boundedTime }));
@@ -1128,6 +1144,18 @@ export function App() {
       if (event.key === 'ArrowLeft' || event.key === 'MediaTrackPrevious') {
         event.preventDefault();
         moveInQueue('previous');
+        return;
+      }
+
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        adjustVolume(5);
+        return;
+      }
+
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        adjustVolume(-5);
       }
     }
 
@@ -1658,7 +1686,9 @@ export function App() {
             onChange={(event) => handleSeekChange(Number(event.target.value))}
           />
           <span>{formatPlaybackTime(playbackTime.duration)}</span>
-          <Volume2 size={18} />
+          <button aria-label={volume > 0 ? '静音' : '取消静音'} className="volume-button" onClick={toggleMute}>
+            {volume > 0 ? <Volume2 size={18} /> : <VolumeX size={18} />}
+          </button>
           <input
             aria-label="音量"
             className="volume-slider"

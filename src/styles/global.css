@@ -824,6 +824,22 @@ button.mini-download:hover {
   accent-color: #fff;
 }
 
+.volume-button {
+  display: grid;
+  place-items: center;
+  padding: 4px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.66);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.volume-button:hover {
+  color: #fff;
+}
+
 .volume-slider {
   width: 82px;
   height: 4px;

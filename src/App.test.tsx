@@ -1123,6 +1123,32 @@ describe('App shell', () => {
     expect(volume.value).toBe('35');
   });
 
+  it('mutes and restores the previous volume from the volume button', () => {
+    render(<App />);
+
+    const volume = () => screen.getByLabelText('音量') as HTMLInputElement;
+    expect(volume().value).toBe('70');
+
+    fireEvent.click(screen.getByLabelText('静音'));
+    expect(volume().value).toBe('0');
+
+    fireEvent.click(screen.getByLabelText('取消静音'));
+    expect(volume().value).toBe('70');
+  });
+
+  it('adjusts the volume with arrow up and down keys', () => {
+    render(<App />);
+
+    const volume = () => screen.getByLabelText('音量') as HTMLInputElement;
+
+    fireEvent.keyDown(window, { key: 'ArrowUp' });
+    expect(volume().value).toBe('75');
+
+    fireEvent.keyDown(window, { key: 'ArrowDown' });
+    fireEvent.keyDown(window, { key: 'ArrowDown' });
+    expect(volume().value).toBe('65');
+  });
+
   it('keeps playback idle when native audio play fails', async () => {
     window.teaMusicBackend = {
       scanResolvedLibrary: async () => [],
