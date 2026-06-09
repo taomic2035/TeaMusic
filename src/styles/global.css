@@ -1266,16 +1266,26 @@ button.mini-download:hover {
   display: none;
 }
 
-.np-lyrics p {
+.np-lyric-line {
   margin: 0;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
   color: rgba(255, 255, 255, 0.4);
+  font: inherit;
   font-size: 20px;
   font-weight: 600;
   line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
   transition: color 0.3s ease, transform 0.3s ease;
 }
 
-.np-lyrics .current {
+.np-lyric-line:hover {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.np-lyric-line.current {
   color: #fff;
   font-size: 26px;
   font-weight: 760;
@@ -1304,11 +1314,11 @@ button.mini-download:hover {
     text-align: center;
   }
 
-  .np-lyrics p {
+  .np-lyric-line {
     font-size: 16px;
   }
 
-  .np-lyrics .current {
+  .np-lyric-line.current {
     font-size: 19px;
   }
 }

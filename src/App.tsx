@@ -1831,9 +1831,14 @@ export function App() {
 
             <div className="np-lyrics" aria-label="歌词" ref={nowPlayingLyricsRef}>
               {currentLyrics.map((line, index) => (
-                <p className={index === currentLyricIndex ? 'current' : ''} key={`np:${currentTrack.id}:${line.at}`}>
+                <button
+                  className={index === currentLyricIndex ? 'np-lyric-line current' : 'np-lyric-line'}
+                  key={`np:${currentTrack.id}:${line.at}`}
+                  type="button"
+                  onClick={() => handleSeekChange(line.at)}
+                >
                   {line.text}
-                </p>
+                </button>
               ))}
             </div>
           </div>

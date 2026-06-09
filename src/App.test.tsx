@@ -231,6 +231,18 @@ describe('App shell', () => {
     expect(screen.queryByLabelText('播放页')).not.toBeInTheDocument();
   });
 
+  it('seeks playback by clicking a lyric line inside the now playing page', () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByLabelText('打开播放页'));
+    const nowPlaying = screen.getByLabelText('播放页');
+    const lyrics = within(nowPlaying).getByLabelText('歌词');
+
+    fireEvent.click(within(lyrics).getByText('让玻璃里的光轻轻晃'));
+
+    expect(within(lyrics).getByText('让玻璃里的光轻轻晃')).toHaveClass('current');
+  });
+
   it('closes the immersive now playing page with Escape', () => {
     render(<App />);
 
