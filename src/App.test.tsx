@@ -874,6 +874,17 @@ describe('App shell', () => {
     expect(recentRows[1]).toHaveTextContent('当发现互相都在躲');
   });
 
+  it('persists the playback mode across app restarts', () => {
+    const firstSession = render(<App />);
+
+    fireEvent.click(screen.getByLabelText('播放模式：顺序播放'));
+    expect(screen.getByLabelText('播放模式：单曲循环')).toBeInTheDocument();
+    firstSession.unmount();
+
+    render(<App />);
+    expect(screen.getByLabelText('播放模式：单曲循环')).toBeInTheDocument();
+  });
+
   it('keeps the current song when repeat-one mode is active', () => {
     render(<App />);
 

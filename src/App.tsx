@@ -204,6 +204,7 @@ const trackStatsStorageKey = 'teaMusic:trackStats';
 const currentTrackStorageKey = 'teaMusic:currentTrackId';
 const playlistStorageKey = 'teaMusic:playlists';
 const volumeStorageKey = 'teaMusic:volume';
+const playbackModeStorageKey = 'teaMusic:playbackMode';
 const autoResolveDelayMs = 250;
 
 type StoredTrackStats = Record<string, { playCount?: number; lastPlayedAt?: string; skipCount?: number; lastSkippedAt?: string }>;
@@ -356,6 +357,15 @@ function restoreVolume(): number {
   return Number.isFinite(storedVolume) ? Math.min(Math.max(storedVolume, 0), 100) : 70;
 }
 
+function restorePlaybackMode(): PlaybackMode {
+  if (typeof window === 'undefined') {
+    return 'queue';
+  }
+
+  const storedValue = window.localStorage.getItem(playbackModeStorageKey);
+  return storedValue === 'repeat-one' || storedValue === 'shuffle' || storedValue === 'queue' ? storedValue : 'queue';
+}
+
 function persistScalarPreference(key: string, value: string) {
   if (typeof window === 'undefined') {
     return;
@@ -473,7 +483,7 @@ export function App() {
   const [isQueueOpen, setIsQueueOpen] = useState(false);
   const [downloadingIds, setDownloadingIds] = useState<Set<string>>(() => new Set());
   const [isDragActive, setIsDragActive] = useState(false);
-  const [playbackMode, setPlaybackMode] = useState<PlaybackMode>('queue');
+  const [playbackMode, setPlaybackMode] = useState<PlaybackMode>(restorePlaybackMode);
   const [sleepTimerMinutes, setSleepTimerMinutes] = useState<SleepTimerMinutes>(null);
   const [playbackTime, setPlaybackTime] = useState({ current: 76, duration: 181 });
   const [volume, setVolume] = useState(restoreVolume);
@@ -651,6 +661,10 @@ export function App() {
   useEffect(() => {
     persistScalarPreference(volumeStorageKey, String(volume));
   }, [volume]);
+
+  useEffect(() => {
+    persistScalarPreference(playbackModeStorageKey, playbackMode);
+  }, [playbackMode]);
 
   useEffect(() => {
     if (audioRef.current) {
