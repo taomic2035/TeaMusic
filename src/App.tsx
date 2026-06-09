@@ -1444,6 +1444,19 @@ export function App() {
               }
             }}
           />
+          {query ? (
+            <button
+              aria-label="清除搜索"
+              className="search-clear"
+              type="button"
+              onClick={() => {
+                setQuery('');
+                searchInputRef.current?.focus();
+              }}
+            >
+              <X size={14} />
+            </button>
+          ) : null}
         </label>
         <span className="resolver-status">{resolverSummary}</span>
       </header>

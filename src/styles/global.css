@@ -242,6 +242,26 @@ button {
   color: rgba(255, 255, 255, 0.44);
 }
 
+.search-clear {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.82);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.search-clear:hover {
+  background: rgba(255, 255, 255, 0.3);
+  color: #fff;
+}
+
 .resolver-status {
   margin-left: auto;
   color: rgba(255, 255, 255, 0.42);

@@ -533,6 +533,20 @@ describe('App shell', () => {
     expect(within(screen.getByLabelText('当前播放')).getByRole('heading', { name: '感谢你爱我' })).toBeInTheDocument();
   });
 
+  it('clears the search query with the inline clear button', () => {
+    render(<App />);
+
+    const search = screen.getByPlaceholderText('搜索歌曲、歌手、歌单') as HTMLInputElement;
+    expect(screen.queryByLabelText('清除搜索')).not.toBeInTheDocument();
+
+    fireEvent.change(search, { target: { value: '感谢' } });
+    expect(screen.getByLabelText('清除搜索')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('清除搜索'));
+    expect(search.value).toBe('');
+    expect(screen.queryByLabelText('清除搜索')).not.toBeInTheDocument();
+  });
+
   it('focuses and clears search with desktop shortcuts', () => {
     render(<App />);
 
