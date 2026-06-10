@@ -37,6 +37,23 @@ button {
   height: 100vh;
   overflow: hidden;
   background: #0d0e12;
+  /* 无边框窗口：空白处可拖动；下方交互/滚动区域设为 no-drag */
+  -webkit-app-region: drag;
+}
+
+.content,
+.search-bar,
+.finder-overlay,
+.track-menu,
+.lib-menu,
+.volume-pop {
+  -webkit-app-region: no-drag;
+}
+
+.drag-strip {
+  height: 26px;
+  flex-shrink: 0;
+  -webkit-app-region: drag;
 }
 
 .app-backdrop {
@@ -809,6 +826,53 @@ button.mini-download:hover {
 
 .track-menu button:hover {
   background: rgba(255, 255, 255, 0.1);
+}
+
+.volume-control {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.volume-btn {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.74);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.volume-btn:hover,
+.volume-btn.active {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.volume-pop {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 50%;
+  z-index: 50;
+  transform: translateX(-50%);
+  display: grid;
+  place-items: center;
+  padding: 14px 10px;
+  border-radius: 14px;
+}
+
+.volume-vertical {
+  width: 6px;
+  height: 110px;
+  margin: 0;
+  writing-mode: vertical-lr;
+  direction: rtl;
+  accent-color: #fff;
+  cursor: pointer;
 }
 
 .menu-volume {

@@ -1,7 +1,6 @@
 import {
   Download,
   Heart,
-  Menu,
   MoreHorizontal,
   Music2,
   Pause,
@@ -12,7 +11,6 @@ import {
   Shuffle,
   SkipBack,
   SkipForward,
-  Timer,
   Volume2,
   VolumeX,
   X,
@@ -32,7 +30,6 @@ import {
 } from './domain/music';
 
 type PlaybackMode = 'queue' | 'repeat-one' | 'shuffle';
-type SleepTimerMinutes = 15 | 30 | 60 | null;
 
 const playbackModeCopy: Record<PlaybackMode, string> = {
   queue: '顺序播放',
@@ -40,7 +37,6 @@ const playbackModeCopy: Record<PlaybackMode, string> = {
   shuffle: '随机播放',
 };
 
-const sleepTimerOptions: SleepTimerMinutes[] = [null, 15, 30, 60];
 const mediaSessionActions = ['play', 'pause', 'previoustrack', 'nexttrack'] satisfies MediaSessionAction[];
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -302,13 +298,12 @@ export function App() {
     () => typeof window === 'undefined' || !window.teaMusicBackend,
   );
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isLibraryMenuOpen, setIsLibraryMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isTrackMenuOpen, setIsTrackMenuOpen] = useState(false);
+  const [isVolumeOpen, setIsVolumeOpen] = useState(false);
   const [downloadingIds, setDownloadingIds] = useState<Set<string>>(() => new Set());
   const [isDragActive, setIsDragActive] = useState(false);
   const [playbackMode, setPlaybackMode] = useState<PlaybackMode>(restorePlaybackMode);
-  const [sleepTimerMinutes, setSleepTimerMinutes] = useState<SleepTimerMinutes>(null);
   const [playbackTime, setPlaybackTime] = useState({ current: 76, duration: 181 });
   const [volume, setVolume] = useState(restoreVolume);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -316,7 +311,6 @@ export function App() {
   const previousTrackIdRef = useRef(currentTrackId);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const localFileInputRef = useRef<HTMLInputElement>(null);
-  const preMuteVolumeRef = useRef(70);
 
   const filteredTracks = useMemo(() => filterTracks(tracks, query), [tracks, query]);
   const playbackQueue = useMemo(() => (filteredTracks.length > 0 ? filteredTracks : tracks), [filteredTracks, tracks]);
@@ -404,19 +398,6 @@ export function App() {
       audioRef.current.volume = volume / 100;
     }
   }, [volume]);
-
-  useEffect(() => {
-    if (!sleepTimerMinutes) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      pausePlayback();
-      setSleepTimerMinutes(null);
-    }, sleepTimerMinutes * 60 * 1000);
-
-    return () => window.clearTimeout(timer);
-  }, [sleepTimerMinutes]);
 
   useEffect(() => {
     if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) {
@@ -745,16 +726,6 @@ export function App() {
     handleVolumeChange(Math.min(Math.max(volume + delta, 0), 100));
   }
 
-  function toggleMute() {
-    if (volume > 0) {
-      preMuteVolumeRef.current = volume;
-      handleVolumeChange(0);
-      return;
-    }
-
-    handleVolumeChange(preMuteVolumeRef.current > 0 ? preMuteVolumeRef.current : 70);
-  }
-
   function handleSeekChange(nextTime: number) {
     const boundedTime = Math.min(Math.max(nextTime, 0), playbackTime.duration);
     setPlaybackTime((existingTime) => ({ ...existingTime, current: boundedTime }));
@@ -777,10 +748,10 @@ export function App() {
       }
 
       if (event.key === 'Escape') {
-        if (isTrackMenuOpen || isLibraryMenuOpen || isSearchOpen || isFinderOpen) {
+        if (isTrackMenuOpen || isVolumeOpen || isSearchOpen || isFinderOpen) {
           event.preventDefault();
           setIsTrackMenuOpen(false);
-          setIsLibraryMenuOpen(false);
+          setIsVolumeOpen(false);
           setIsSearchOpen(false);
           setIsFinderOpen(false);
         }
@@ -864,15 +835,7 @@ export function App() {
     setPlaybackMode((mode) => (mode === 'queue' ? 'repeat-one' : mode === 'repeat-one' ? 'shuffle' : 'queue'));
   }
 
-  function cycleSleepTimer() {
-    setSleepTimerMinutes((minutes) => {
-      const currentIndex = sleepTimerOptions.indexOf(minutes);
-      return sleepTimerOptions[(currentIndex + 1) % sleepTimerOptions.length];
-    });
-  }
-
   const ModeIcon = playbackMode === 'queue' ? Repeat : playbackMode === 'repeat-one' ? Repeat1 : Shuffle;
-  const sleepTimerLabel = sleepTimerMinutes ? `${sleepTimerMinutes} 分钟` : '关闭';
 
   return (
     <div
@@ -887,35 +850,17 @@ export function App() {
     >
       <div aria-hidden="true" className="app-backdrop" />
       {isDragActive ? <div className="drop-hint">松开导入到本地音乐</div> : null}
-      <header className="topbar">
-        <span className="app-title">汽水音乐</span>
-        <button
-          aria-label="菜单"
-          className={isLibraryMenuOpen ? 'lib-menu-btn active' : 'lib-menu-btn'}
-          onClick={() => setIsLibraryMenuOpen((open) => !open)}
-        >
-          <Menu size={18} />
-        </button>
-        {isLibraryMenuOpen ? (
-          <>
-            <div aria-hidden="true" className="menu-scrim" onClick={() => setIsLibraryMenuOpen(false)} />
-            <div className="lib-menu glass-panel" role="menu">
-              <button onClick={() => { setIsSearchOpen(true); setIsLibraryMenuOpen(false); }}>搜索</button>
-              <button onClick={() => { void handleLocalImportClick(); setIsLibraryMenuOpen(false); }}>导入本地音乐</button>
-              <button onClick={() => { setIsFinderOpen(true); setIsLibraryMenuOpen(false); }}>在线找歌</button>
-            </div>
-          </>
-        ) : null}
-        <input
-          ref={localFileInputRef}
-          aria-label="添加本地音乐"
-          className="visually-hidden"
-          type="file"
-          accept="audio/*,.mp3,.flac,.wav,.m4a,.aac,.ogg,.aif,.aiff,.alac"
-          multiple
-          onChange={handleLocalFiles}
-        />
-      </header>
+      <input
+        ref={localFileInputRef}
+        aria-label="添加本地音乐"
+        className="visually-hidden"
+        type="file"
+        accept="audio/*,.mp3,.flac,.wav,.m4a,.aac,.ogg,.aif,.aiff,.alac"
+        multiple
+        onChange={handleLocalFiles}
+      />
+
+      {!isSearchOpen ? <div aria-hidden="true" className="drag-strip" /> : null}
 
       {isSearchOpen ? (
         <div className="search-bar">
@@ -1026,6 +971,33 @@ export function App() {
           <button aria-label="下一首" onClick={skipToNextTrack}>
             <SkipForward size={18} fill="currentColor" />
           </button>
+
+          <div className="volume-control">
+            <button
+              aria-label="音量"
+              className={isVolumeOpen ? 'volume-btn active' : 'volume-btn'}
+              onClick={() => setIsVolumeOpen((open) => !open)}
+            >
+              {volume > 0 ? <Volume2 size={18} /> : <VolumeX size={18} />}
+            </button>
+            {isVolumeOpen ? (
+              <>
+                <div aria-hidden="true" className="menu-scrim" onClick={() => setIsVolumeOpen(false)} />
+                <div className="volume-pop glass-panel">
+                  <input
+                    aria-label="音量大小"
+                    className="volume-vertical"
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={volume}
+                    onChange={(event) => handleVolumeChange(Number(event.target.value))}
+                  />
+                </div>
+              </>
+            ) : null}
+          </div>
+
           <button
             aria-label="更多操作"
             className={isTrackMenuOpen ? 'track-menu-btn active' : 'track-menu-btn'}
@@ -1037,22 +1009,9 @@ export function App() {
             <>
               <div aria-hidden="true" className="menu-scrim" onClick={() => setIsTrackMenuOpen(false)} />
               <div className="track-menu glass-panel" role="menu">
-                <div className="menu-volume">
-                  <button aria-label={volume > 0 ? '静音' : '取消静音'} onClick={toggleMute}>
-                    {volume > 0 ? <Volume2 size={16} /> : <VolumeX size={16} />}
-                  </button>
-                  <input
-                    aria-label="音量"
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={volume}
-                    onChange={(event) => handleVolumeChange(Number(event.target.value))}
-                  />
-                </div>
-                <button aria-label={`睡眠定时：${sleepTimerLabel}`} onClick={cycleSleepTimer}>
-                  睡眠定时：{sleepTimerLabel}
-                </button>
+                <button onClick={() => { setIsSearchOpen(true); setIsTrackMenuOpen(false); }}>搜索</button>
+                <button onClick={() => { void handleLocalImportClick(); setIsTrackMenuOpen(false); }}>导入本地音乐</button>
+                <button onClick={() => { setIsFinderOpen(true); setIsTrackMenuOpen(false); }}>在线找歌</button>
                 {canRemoveCurrentLocalTrack ? (
                   <button aria-label="移出本地音乐" onClick={() => { void removeCurrentLocalTrack(); setIsTrackMenuOpen(false); }}>移出本地音乐</button>
                 ) : null}

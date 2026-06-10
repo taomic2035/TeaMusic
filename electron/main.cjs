@@ -17,8 +17,7 @@ function createWindow() {
     minWidth: 360,
     minHeight: 620,
     backgroundColor: '#101114',
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 16, y: 15 },
+    frame: false,
     vibrancy: process.platform === 'darwin' ? 'under-window' : undefined,
     visualEffectState: 'active',
     webPreferences: {

@@ -11,31 +11,31 @@ describe('App shell', () => {
   });
 
   function importViaMenu() {
-    fireEvent.click(screen.getByLabelText('菜单'));
+    fireEvent.click(screen.getByLabelText('更多操作'));
     fireEvent.click(screen.getByText('导入本地音乐'));
   }
 
   function openSearch() {
-    fireEvent.click(screen.getByLabelText('菜单'));
+    fireEvent.click(screen.getByLabelText('更多操作'));
     fireEvent.click(screen.getByText('搜索'));
   }
 
-  function openPlayerMenu() {
-    fireEvent.click(screen.getByLabelText('更多操作'));
+  function openVolume() {
+    fireEvent.click(screen.getByLabelText('音量'));
   }
 
-  it('renders a single-screen minimal player without sidebar or playlists', () => {
+  it('renders a single-screen minimal player without sidebar, toolbar or playlists', () => {
     render(<App />);
 
-    expect(screen.getByText('汽水音乐')).toBeInTheDocument();
     expect(screen.getByLabelText('歌曲列表')).toBeInTheDocument();
     expect(screen.getByLabelText('当前播放')).toBeInTheDocument();
+    expect(screen.getByLabelText('更多操作')).toBeInTheDocument();
 
+    expect(screen.queryByRole('banner')).not.toBeInTheDocument();
     expect(screen.queryByText('发现')).not.toBeInTheDocument();
-    expect(screen.queryByText('我喜欢')).not.toBeInTheDocument();
     expect(screen.queryByText('今日循环')).not.toBeInTheDocument();
-    expect(screen.queryByText('播放列表')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('播放队列面板')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('睡眠定时：关闭')).not.toBeInTheDocument();
   });
 
   it('adds local audio to the unified library with a special badge', () => {
@@ -55,7 +55,7 @@ describe('App shell', () => {
   it('imports dropped local audio files with local badges', () => {
     render(<App />);
 
-    const shell = screen.getByText('汽水音乐').closest('.app-shell') as HTMLElement;
+    const shell = document.querySelector('.app-shell') as HTMLElement;
     fireEvent.drop(shell, {
       dataTransfer: {
         files: [new File(['audio'], '拖进来的歌 - Taomic.flac', { type: 'audio/flac' })],
@@ -70,7 +70,7 @@ describe('App shell', () => {
   it('imports dropped Mac lossless audio files even when the browser omits a MIME type', () => {
     render(<App />);
 
-    const shell = screen.getByText('汽水音乐').closest('.app-shell') as HTMLElement;
+    const shell = document.querySelector('.app-shell') as HTMLElement;
     fireEvent.drop(shell, {
       dataTransfer: {
         files: [new File(['audio'], '母带现场 - Taomic.aiff', { type: '' })],
@@ -227,7 +227,7 @@ describe('App shell', () => {
     };
 
     render(<App />);
-    fireEvent.click(screen.getByLabelText('菜单'));
+    fireEvent.click(screen.getByLabelText('更多操作'));
     fireEvent.click(screen.getByText('在线找歌'));
     const finderInput = screen.getByPlaceholderText('歌名或歌手，回车搜索');
     fireEvent.change(finderInput, { target: { value: '晴天' } });
@@ -261,8 +261,7 @@ describe('App shell', () => {
     };
 
     render(<App />);
-    fireEvent.click(screen.getByLabelText('菜单'));
-    fireEvent.click(screen.getByText('搜索'));
+    openSearch();
     const search = screen.getByPlaceholderText('搜索歌曲、歌手');
     fireEvent.change(search, { target: { value: '不存在的歌' } });
     fireEvent.keyDown(search, { key: 'Enter' });
@@ -524,43 +523,6 @@ describe('App shell', () => {
     random.mockRestore();
   });
 
-  it('cycles the sleep timer from off through focused listening presets', () => {
-    render(<App />);
-
-    openPlayerMenu();
-    fireEvent.click(screen.getByLabelText('睡眠定时：关闭'));
-    expect(screen.getByLabelText('睡眠定时：15 分钟')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByLabelText('睡眠定时：15 分钟'));
-    expect(screen.getByLabelText('睡眠定时：30 分钟')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByLabelText('睡眠定时：30 分钟'));
-    expect(screen.getByLabelText('睡眠定时：60 分钟')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByLabelText('睡眠定时：60 分钟'));
-    expect(screen.getByLabelText('睡眠定时：关闭')).toBeInTheDocument();
-  });
-
-  it('pauses playback when the sleep timer expires', () => {
-    vi.useFakeTimers();
-    render(<App />);
-
-    fireEvent.click(screen.getByLabelText('播放'));
-    openPlayerMenu();
-    fireEvent.click(screen.getByLabelText('睡眠定时：关闭'));
-    Object.defineProperty(document.querySelector('audio') as HTMLAudioElement, 'pause', {
-      configurable: true,
-      value: vi.fn(),
-    });
-
-    act(() => {
-      vi.advanceTimersByTime(15 * 60 * 1000);
-    });
-
-    expect(screen.getByLabelText('播放')).toBeInTheDocument();
-    expect(screen.getByLabelText('睡眠定时：关闭')).toBeInTheDocument();
-  });
-
   it('likes the current track and reflects the liked state', () => {
     render(<App />);
 
@@ -610,15 +572,15 @@ describe('App shell', () => {
     const firstSession = render(<App />);
 
     fireEvent.click(screen.getByLabelText('下一首'));
-    openPlayerMenu();
-    fireEvent.change(screen.getByLabelText('音量'), { target: { value: '35' } });
+    openVolume();
+    fireEvent.change(screen.getByLabelText('音量大小'), { target: { value: '35' } });
     firstSession.unmount();
 
     render(<App />);
 
     expect(within(screen.getByLabelText('当前播放')).getByRole('heading', { name: '当发现互相都在躲' })).toBeInTheDocument();
-    openPlayerMenu();
-    expect((screen.getByLabelText('音量') as HTMLInputElement).value).toBe('35');
+    openVolume();
+    expect((screen.getByLabelText('音量大小') as HTMLInputElement).value).toBe('35');
   });
 
   it('applies restored volume to the audio element on launch', async () => {
@@ -631,36 +593,22 @@ describe('App shell', () => {
     });
   });
 
-  it('exposes a volume slider for listening control', () => {
+  it('exposes a vertical volume slider for listening control', () => {
     render(<App />);
 
-    openPlayerMenu();
-    const volume = screen.getByLabelText('音量') as HTMLInputElement;
+    openVolume();
+    const volume = screen.getByLabelText('音量大小') as HTMLInputElement;
     expect(volume.value).toBe('70');
 
     fireEvent.change(volume, { target: { value: '35' } });
     expect(volume.value).toBe('35');
   });
 
-  it('mutes and restores the previous volume from the volume button', () => {
-    render(<App />);
-
-    openPlayerMenu();
-    const volume = () => screen.getByLabelText('音量') as HTMLInputElement;
-    expect(volume().value).toBe('70');
-
-    fireEvent.click(screen.getByLabelText('静音'));
-    expect(volume().value).toBe('0');
-
-    fireEvent.click(screen.getByLabelText('取消静音'));
-    expect(volume().value).toBe('70');
-  });
-
   it('adjusts the volume with arrow up and down keys', () => {
     render(<App />);
 
-    openPlayerMenu();
-    const volume = () => screen.getByLabelText('音量') as HTMLInputElement;
+    openVolume();
+    const volume = () => screen.getByLabelText('音量大小') as HTMLInputElement;
 
     fireEvent.keyDown(window, { key: 'ArrowUp' });
     expect(volume().value).toBe('75');
