@@ -11,7 +11,9 @@
     "test": "vitest",
     "typecheck": "node node_modules/typescript/lib/tsc.js -p tsconfig.json --noEmit",
     "build": "npm run typecheck && vite build",
+    "start": "npm run build && electron .",
     "start:mac": "npm run build && electron .",
+    "app": "electron .",
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
