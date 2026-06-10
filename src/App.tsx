@@ -1,6 +1,7 @@
 import {
   Check,
   ChevronDown,
+  CloudDownload,
   Download,
   Heart,
   Library,
@@ -34,11 +35,9 @@ import {
   createLocalTrackFromFile,
   createLocalTrackFromPath,
   createResolvedTrackFromPath,
-  createResolverJob,
   filterTracks,
   formatPlaybackTime,
   getAdjacentTrackId,
-  getResolverSummary,
   getTrackBadge,
   markTrackPlayed,
   markTrackSkipped,
@@ -205,7 +204,6 @@ const currentTrackStorageKey = 'teaMusic:currentTrackId';
 const playlistStorageKey = 'teaMusic:playlists';
 const volumeStorageKey = 'teaMusic:volume';
 const playbackModeStorageKey = 'teaMusic:playbackMode';
-const autoResolveDelayMs = 250;
 
 type StoredTrackStats = Record<string, { playCount?: number; lastPlayedAt?: string; skipCount?: number; lastSkippedAt?: string }>;
 
@@ -471,7 +469,11 @@ function TrackArtwork({ className, track }: { className: string; track: Track })
 export function App() {
   const [tracks, setTracks] = useState(() => restorePersistedTrackState(initialTracks));
   const [query, setQuery] = useState('');
-  const [resolverJobs, setResolverJobs] = useState<ReturnType<typeof createResolverJob>[]>([]);
+  const [isFinderOpen, setIsFinderOpen] = useState(false);
+  const [finderQuery, setFinderQuery] = useState('');
+  const [finderResults, setFinderResults] = useState<Array<{ id: string; title: string; artist: string }>>([]);
+  const [finderLoading, setFinderLoading] = useState(false);
+  const [finderError, setFinderError] = useState('');
   const [currentTrackId, setCurrentTrackId] = useState(() => restoreCurrentTrackId(initialTracks));
   const [activeView, setActiveView] = useState<ActiveView>('discover');
   const [playlistState, setPlaylistState] = useState(restorePlaylists);
@@ -490,7 +492,6 @@ export function App() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const storedCurrentTrackIdRef = useRef(readStoredCurrentTrackId());
   const previousTrackIdRef = useRef(currentTrackId);
-  const resolverQueryRef = useRef(new Set<string>());
   const searchInputRef = useRef<HTMLInputElement>(null);
   const localFileInputRef = useRef<HTMLInputElement>(null);
   const nowPlayingLyricsRef = useRef<HTMLDivElement>(null);
@@ -558,14 +559,6 @@ export function App() {
   }, [currentTrackId, playbackQueue]);
   const recommendationCards = useMemo(() => buildRecommendationCards(tracks), [tracks]);
   const currentTrack = tracks.find((track) => track.id === currentTrackId) ?? tracks[0];
-  const resolverSummary = getResolverSummary(resolverJobs);
-  const activeResolverJob = resolverJobs.find((job) => job.query === query.trim());
-  const activeResolverBadge =
-    activeResolverJob?.status === 'queued' || activeResolverJob?.status === 'running'
-      ? '补全中'
-      : activeResolverJob?.status === 'failed'
-        ? '未补全'
-        : null;
   const isActiveUserPlaylist = isPlaylistView(activeView) && isUserPlaylistView(activeView);
   const activeUserPlaylistHasCurrentTrack = isActiveUserPlaylist
     ? Boolean(playlistState[activeView]?.trackIds.includes(currentTrack.id))
@@ -588,7 +581,7 @@ export function App() {
       }
     : {
         message: query.trim() ? '当前曲库没有这首歌' : '这里还没有歌曲',
-        canResolve: Boolean(query.trim()),
+        canResolve: false,
       };
 
   useEffect(() => {
@@ -859,70 +852,61 @@ export function App() {
     setActiveView('local');
   }
 
-  async function queueResolverJob() {
-    const trimmedQuery = query.trim();
+  async function runOnlineSearch() {
+    const trimmedQuery = finderQuery.trim();
+    const backend = window.teaMusicBackend;
 
-    if (!trimmedQuery || resolverQueryRef.current.has(trimmedQuery)) {
+    if (!trimmedQuery || !backend?.searchOnline) {
       return;
     }
 
-    const now = new Date().toISOString();
-    const job = createResolverJob(trimmedQuery, now);
-    resolverQueryRef.current.add(job.query);
-    setResolverJobs((jobs) => [job, ...jobs]);
-
-    if (!window.teaMusicBackend) {
-      return;
-    }
-
-    setResolverJobs((jobs) =>
-      jobs.map((queuedJob) => (queuedJob.id === job.id ? { ...queuedJob, status: 'running', updatedAt: now } : queuedJob)),
-    );
+    setFinderLoading(true);
+    setFinderError('');
 
     try {
-      const result = await window.teaMusicBackend.resolveMissingTrack(job.query);
-      const resolvedTracks = result.files.map((filePath) => createResolvedTrackFromPath(filePath, new Date().toISOString()));
+      const results = await backend.searchOnline(trimmedQuery);
+      setFinderResults(results);
 
-      if (resolvedTracks.length > 0) {
-        setTracks((existingTracks) => mergeTracksById(resolvedTracks, existingTracks));
-        setCurrentTrackId(resolvedTracks[0].id);
-        setQuery('');
+      if (results.length === 0) {
+        setFinderError('没找到，换个关键词试试');
       }
-
-      setResolverJobs((jobs) =>
-        jobs.map((queuedJob) =>
-          queuedJob.id === job.id ? { ...queuedJob, status: 'succeeded', updatedAt: new Date().toISOString() } : queuedJob,
-        ),
-      );
-    } catch (error) {
-      resolverQueryRef.current.delete(job.query);
-      setResolverJobs((jobs) =>
-        jobs.map((queuedJob) =>
-          queuedJob.id === job.id
-            ? { ...queuedJob, status: 'failed', error: error instanceof Error ? error.message : String(error), updatedAt: new Date().toISOString() }
-            : queuedJob,
-        ),
-      );
+    } catch {
+      setFinderError('搜索失败，稍后再试');
+    } finally {
+      setFinderLoading(false);
     }
   }
 
-  useEffect(() => {
-    const trimmedQuery = query.trim();
+  async function downloadFromFinder(song: { id: string; title: string; artist: string }) {
+    const backend = window.teaMusicBackend;
 
-    if (trimmedQuery.length < 2 || !window.teaMusicBackend || filteredTracks.length > 0 || isPlaylistView(activeView)) {
+    if (!backend?.downloadOnline || downloadingIds.has(song.id)) {
       return;
     }
 
-    if (resolverJobs.some((job) => job.query === trimmedQuery)) {
-      return;
+    setDownloadingIds((ids) => new Set(ids).add(song.id));
+    setFinderError('');
+
+    try {
+      const result = await backend.downloadOnline(song.id);
+
+      if (result && 'filePath' in result) {
+        const downloadedTrack = createResolvedTrackFromPath(result.filePath, new Date().toISOString());
+        setTracks((existingTracks) => mergeTracksById([downloadedTrack], existingTracks));
+        setFinderResults((rows) => rows.filter((row) => row.id !== song.id));
+      } else {
+        setFinderError(result?.error || '这首暂时下不了，换一首');
+      }
+    } catch {
+      setFinderError('下载失败，换一首试试');
+    } finally {
+      setDownloadingIds((ids) => {
+        const next = new Set(ids);
+        next.delete(song.id);
+        return next;
+      });
     }
-
-    const timer = window.setTimeout(() => {
-      void queueResolverJob();
-    }, autoResolveDelayMs);
-
-    return () => window.clearTimeout(timer);
-  }, [activeView, filteredTracks.length, query, resolverJobs]);
+  }
 
   async function togglePlayback() {
     if (!currentTrack?.audioUrl || !audioRef.current) {
@@ -1091,35 +1075,6 @@ export function App() {
     setTracks((existingTracks) =>
       existingTracks.map((track) => (track.id === currentTrack.id ? { ...track, liked: !track.liked } : track)),
     );
-  }
-
-  async function downloadTrack(track: Track) {
-    if (track.source !== 'catalog' || track.filePath || !window.teaMusicBackend?.resolveMissingTrack) {
-      return;
-    }
-
-    const query = `${track.title} ${track.artist}`.trim();
-    setDownloadingIds((ids) => new Set(ids).add(track.id));
-
-    try {
-      const result = await window.teaMusicBackend.resolveMissingTrack(query);
-      const downloadedTracks = (result?.files ?? []).map((filePath) =>
-        createResolvedTrackFromPath(filePath, new Date().toISOString()),
-      );
-
-      if (downloadedTracks.length > 0) {
-        setTracks((existingTracks) => mergeTracksById(downloadedTracks, existingTracks));
-        setCurrentTrackId(downloadedTracks[0].id);
-      }
-    } catch {
-      // Failures stay quiet; the download button returns to its idle state for a retry.
-    } finally {
-      setDownloadingIds((ids) => {
-        const nextIds = new Set(ids);
-        nextIds.delete(track.id);
-        return nextIds;
-      });
-    }
   }
 
   useEffect(() => {
@@ -1423,6 +1378,10 @@ export function App() {
               </button>
             ))}
         </section>
+
+        <button className="finder-entry" onClick={() => setIsFinderOpen(true)} aria-label="在线找歌">
+          <CloudDownload size={15} strokeWidth={2.2} />
+        </button>
       </aside>
 
       <header className="topbar">
@@ -1436,11 +1395,6 @@ export function App() {
             onKeyDown={(event) => {
               if (event.key === 'Escape') {
                 setQuery('');
-                return;
-              }
-
-              if (event.key === 'Enter' && filteredTracks.length === 0) {
-                void queueResolverJob();
               }
             }}
           />
@@ -1458,7 +1412,6 @@ export function App() {
             </button>
           ) : null}
         </label>
-        <span className="resolver-status">{resolverSummary}</span>
       </header>
 
       <main className="content">
@@ -1536,23 +1489,10 @@ export function App() {
                 );
               })}
               {filteredTracks.length === 0 ? (
-                <>
-                  {activeResolverBadge ? (
-                    <div className="resolver-row">
-                      <div className="cover-chip" />
-                      <div>
-                        <strong>{query.trim()}</strong>
-                        <span>曲库后台补全</span>
-                      </div>
-                      <em>{activeResolverBadge}</em>
-                    </div>
-                  ) : null}
-                  <div className="empty-state">
-                    <Music2 size={18} />
-                    <span>{emptyState.message}</span>
-                    {emptyState.canResolve ? <button onClick={queueResolverJob}>尝试曲库补全</button> : null}
-                  </div>
-                </>
+                <div className="empty-state">
+                  <Music2 size={18} />
+                  <span>{emptyState.message}</span>
+                </div>
               ) : null}
             </div>
           </section>
@@ -1653,25 +1593,6 @@ export function App() {
           >
             <Heart size={16} fill={currentTrack.liked ? 'currentColor' : 'none'} />
           </button>
-          {currentTrack.source === 'catalog' && !currentTrack.filePath ? (
-            downloadingIds.has(currentTrack.id) ? (
-              <span aria-label="下载中" className="mini-download downloading">
-                <Download size={16} />
-              </span>
-            ) : (
-              <button
-                aria-label="下载当前歌曲"
-                className="mini-download"
-                onClick={() => void downloadTrack(currentTrack)}
-              >
-                <Download size={16} />
-              </button>
-            )
-          ) : (
-            <span aria-label="已下载" className="mini-download done" title="已下载到本地">
-              <Check size={16} />
-            </span>
-          )}
         </div>
 
         <div className="transport">
@@ -1741,6 +1662,57 @@ export function App() {
           onTimeUpdate={handleTimeUpdate}
         />
       </footer>
+
+      {isFinderOpen ? (
+        <div className="finder-overlay" role="dialog" aria-label="在线找歌" onClick={() => setIsFinderOpen(false)}>
+          <div className="finder-panel glass-panel" onClick={(event) => event.stopPropagation()}>
+            <div className="finder-head">
+              <span>在线找歌</span>
+              <button aria-label="关闭在线找歌" onClick={() => setIsFinderOpen(false)}>
+                <X size={16} />
+              </button>
+            </div>
+            <label className="finder-search">
+              <Search size={15} />
+              <input
+                autoFocus
+                placeholder="歌名或歌手，回车搜索"
+                value={finderQuery}
+                onChange={(event) => setFinderQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    void runOnlineSearch();
+                  }
+                  if (event.key === 'Escape') {
+                    setIsFinderOpen(false);
+                  }
+                }}
+              />
+            </label>
+            {finderError ? <p className="finder-hint">{finderError}</p> : null}
+            <ul className="finder-list">
+              {finderResults.map((song) => (
+                <li key={song.id}>
+                  <div className="finder-meta">
+                    <span className="finder-title">{song.title}</span>
+                    <span className="finder-artist">{song.artist}</span>
+                  </div>
+                  {downloadingIds.has(song.id) ? (
+                    <span aria-label="下载中" className="finder-dl downloading">
+                      <Download size={16} />
+                    </span>
+                  ) : (
+                    <button className="finder-dl" aria-label="下载" onClick={() => void downloadFromFinder(song)}>
+                      <Download size={16} />
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+            {finderLoading ? <p className="finder-hint">搜索中…</p> : null}
+          </div>
+        </div>
+      ) : null}
 
       {isQueueOpen ? (
         <>
