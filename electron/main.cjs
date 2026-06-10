@@ -12,10 +12,10 @@ const { searchSongs, downloadSong } = require('./fangpi-source.cjs');
 
 function createWindow() {
   const window = new BrowserWindow({
-    width: 1180,
-    height: 760,
-    minWidth: 640,
-    minHeight: 560,
+    width: 420,
+    height: 820,
+    minWidth: 360,
+    minHeight: 620,
     backgroundColor: '#101114',
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 15 },

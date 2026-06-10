@@ -1,27 +1,18 @@
 import {
-  Check,
-  CloudDownload,
   Download,
   Heart,
-  Library,
-  LocateFixed,
-  ListMinus,
-  ListPlus,
-  ListMusic,
+  Menu,
   MoreHorizontal,
   Music2,
   Pause,
   Play,
-  Radio,
   Repeat,
   Repeat1,
   Search,
   Shuffle,
   SkipBack,
   SkipForward,
-  Sparkles,
   Timer,
-  Upload,
   Volume2,
   VolumeX,
   X,
@@ -29,7 +20,6 @@ import {
 import { ChangeEvent, CSSProperties, DragEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Track,
-  buildSimilarTrackIds,
   createLocalTrackFromFile,
   createLocalTrackFromPath,
   createResolvedTrackFromPath,
@@ -41,55 +31,8 @@ import {
   markTrackSkipped,
 } from './domain/music';
 
-type LibraryView = 'discover' | 'library' | 'local' | 'favorites';
-type SystemPlaylistView = 'playlist:daily' | 'playlist:night' | 'playlist:similar' | 'playlist:recent';
-type UserPlaylistView = `playlist:user:${string}`;
-type PlaylistView = SystemPlaylistView | UserPlaylistView;
-type ActiveView = LibraryView | PlaylistView;
 type PlaybackMode = 'queue' | 'repeat-one' | 'shuffle';
 type SleepTimerMinutes = 15 | 30 | 60 | null;
-type PlaylistConfig = { name: string; description: string; kicker: string; trackIds: string[] };
-type PlaylistState = Record<string, PlaylistConfig>;
-
-const navItems = [
-  { key: 'discover', label: '发现', icon: Radio },
-  { key: 'library', label: '曲库', icon: Library },
-  { key: 'local', label: '本地音乐', icon: ListMusic },
-  { key: 'favorites', label: '我喜欢', icon: Heart },
-] satisfies Array<{ key: LibraryView; label: string; icon: typeof Radio }>;
-
-const viewCopy: Record<LibraryView, { title: string; description: string }> = {
-  discover: {
-    title: '统一曲库',
-    description: '在线、已补全、本地音乐放在同一个队列里',
-  },
-  library: {
-    title: '曲库',
-    description: '所有可播放内容都在这里聚合',
-  },
-  local: {
-    title: '本地音乐',
-    description: '导入的本地歌曲会一直保留本地标记',
-  },
-  favorites: {
-    title: '我喜欢',
-    description: '喜欢过的歌曲会参与下一轮相似推荐',
-  },
-};
-
-const viewKicker: Record<LibraryView, string> = {
-  discover: '统一曲库',
-  library: '全部歌曲',
-  local: '本地收藏',
-  favorites: '喜欢的音乐',
-};
-
-const viewFilters: Record<LibraryView, (track: Track) => boolean> = {
-  discover: () => true,
-  library: () => true,
-  local: (track) => track.source === 'local',
-  favorites: (track) => track.liked,
-};
 
 const playbackModeCopy: Record<PlaybackMode, string> = {
   queue: '顺序播放',
@@ -99,41 +42,6 @@ const playbackModeCopy: Record<PlaybackMode, string> = {
 
 const sleepTimerOptions: SleepTimerMinutes[] = [null, 15, 30, 60];
 const mediaSessionActions = ['play', 'pause', 'previoustrack', 'nexttrack'] satisfies MediaSessionAction[];
-
-const initialPlaylists: Record<SystemPlaylistView, PlaylistConfig> = {
-  'playlist:daily': {
-    name: '今日循环',
-    description: '今天已经准备好的循环队列',
-    kicker: '播放列表',
-    trackIds: ['local:seed:thanks', 'catalog:seed:walk'],
-  },
-  'playlist:night': {
-    name: '深夜不跳歌',
-    description: '更适合夜里连续播放的歌',
-    kicker: '播放列表',
-    trackIds: ['resolved:seed:hiding', 'local:seed:thanks'],
-  },
-  'playlist:similar': {
-    name: '相似推荐',
-    description: '从当前播放延展出的临时播放队列',
-    kicker: '播放队列',
-    trackIds: [],
-  },
-  'playlist:recent': {
-    name: '最近播放',
-    description: '按最近一次播放时间排列',
-    kicker: '播放历史',
-    trackIds: [],
-  },
-};
-
-function isPlaylistView(view: ActiveView): view is PlaylistView {
-  return view.startsWith('playlist:');
-}
-
-function isUserPlaylistView(view: string): view is UserPlaylistView {
-  return view.startsWith('playlist:user:');
-}
 
 function isTypingTarget(target: EventTarget | null): boolean {
   return (
@@ -198,7 +106,6 @@ const initialTracks: Track[] = [
 const likedTrackStorageKey = 'teaMusic:likedTrackIds';
 const trackStatsStorageKey = 'teaMusic:trackStats';
 const currentTrackStorageKey = 'teaMusic:currentTrackId';
-const playlistStorageKey = 'teaMusic:playlists';
 const volumeStorageKey = 'teaMusic:volume';
 const playbackModeStorageKey = 'teaMusic:playbackMode';
 
@@ -373,94 +280,13 @@ function persistScalarPreference(key: string, value: string) {
   }
 }
 
-function restorePlaylists(): PlaylistState {
-  if (typeof window === 'undefined') {
-    return initialPlaylists;
-  }
-
-  const storedValue = window.localStorage.getItem(playlistStorageKey);
-
-  if (storedValue === null) {
-    return initialPlaylists;
-  }
-
-  try {
-    const parsedValue = JSON.parse(storedValue) as Partial<
-      Record<SystemPlaylistView, string[]> & { userPlaylists?: Array<PlaylistConfig & { id?: string }> }
-    >;
-    const userPlaylists = Array.isArray(parsedValue.userPlaylists)
-      ? parsedValue.userPlaylists.reduce<PlaylistState>((playlists, playlist) => {
-          if (!playlist.id || !isUserPlaylistView(playlist.id) || !Array.isArray(playlist.trackIds)) {
-            return playlists;
-          }
-
-          playlists[playlist.id] = {
-            name: typeof playlist.name === 'string' ? playlist.name : '我的歌单',
-            description: typeof playlist.description === 'string' ? playlist.description : '自己创建的听歌队列',
-            kicker: typeof playlist.kicker === 'string' ? playlist.kicker : '我的歌单',
-            trackIds: playlist.trackIds.filter((trackId): trackId is string => typeof trackId === 'string'),
-          };
-          return playlists;
-        }, {})
-      : {};
-
-    return {
-      ...initialPlaylists,
-      'playlist:daily': {
-        ...initialPlaylists['playlist:daily'],
-        trackIds: Array.isArray(parsedValue['playlist:daily']) ? parsedValue['playlist:daily'] : initialPlaylists['playlist:daily'].trackIds,
-      },
-      'playlist:night': {
-        ...initialPlaylists['playlist:night'],
-        trackIds: Array.isArray(parsedValue['playlist:night']) ? parsedValue['playlist:night'] : initialPlaylists['playlist:night'].trackIds,
-      },
-      ...userPlaylists,
-    };
-  } catch {
-    return initialPlaylists;
-  }
-}
-
-function persistPlaylists(playlists: PlaylistState) {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(
-      playlistStorageKey,
-      JSON.stringify({
-        'playlist:daily': playlists['playlist:daily'].trackIds,
-        'playlist:night': playlists['playlist:night'].trackIds,
-        userPlaylists: Object.entries(playlists)
-          .filter(([playlistId]) => isUserPlaylistView(playlistId))
-          .map(([id, playlist]) => ({ id, ...playlist })),
-      }),
-    );
-  } catch {
-    // Playlist persistence is best-effort; the in-memory queue still works.
-  }
-}
-
 function mergeTracksById(nextTracks: Track[], existingTracks: Track[]): Track[] {
   const existingIds = new Set(existingTracks.map((track) => track.id));
   return [...nextTracks.filter((track) => !existingIds.has(track.id)), ...existingTracks];
 }
 
-function shouldRenderDecorativeWindowControls(): boolean {
-  return typeof window === 'undefined' || !window.teaMusicBackend;
-}
-
 function getTrackSubtitle(track: Track): string {
   return track.album ? `${track.artist} · ${track.album}` : track.artist;
-}
-
-function TrackArtwork({ className, track }: { className: string; track: Track }) {
-  if (track.coverUrl) {
-    return <img alt={`${track.title} 封面`} className={className} src={track.coverUrl} />;
-  }
-
-  return <div aria-hidden="true" className={className} />;
 }
 
 export function App() {
@@ -472,13 +298,12 @@ export function App() {
   const [finderLoading, setFinderLoading] = useState(false);
   const [finderError, setFinderError] = useState('');
   const [currentTrackId, setCurrentTrackId] = useState(() => restoreCurrentTrackId(initialTracks));
-  const [activeView, setActiveView] = useState<ActiveView>('discover');
-  const [playlistState, setPlaylistState] = useState(restorePlaylists);
   const [hasCompletedLibraryRestore, setHasCompletedLibraryRestore] = useState(
     () => typeof window === 'undefined' || !window.teaMusicBackend,
   );
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isQueueOpen, setIsQueueOpen] = useState(false);
+  const [isLibraryMenuOpen, setIsLibraryMenuOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isTrackMenuOpen, setIsTrackMenuOpen] = useState(false);
   const [downloadingIds, setDownloadingIds] = useState<Set<string>>(() => new Set());
   const [isDragActive, setIsDragActive] = useState(false);
@@ -493,86 +318,11 @@ export function App() {
   const localFileInputRef = useRef<HTMLInputElement>(null);
   const preMuteVolumeRef = useRef(70);
 
-  const recentTracks = useMemo(
-    () =>
-      tracks
-        .filter((track) => track.lastPlayedAt)
-        .sort((firstTrack, secondTrack) => Date.parse(secondTrack.lastPlayedAt ?? '') - Date.parse(firstTrack.lastPlayedAt ?? '')),
-    [tracks],
-  );
-  const viewTracks = useMemo(() => {
-    if (activeView === 'playlist:recent') {
-      return recentTracks;
-    }
-
-    if (isPlaylistView(activeView)) {
-      const ids = new Set(playlistState[activeView]?.trackIds ?? []);
-      return tracks.filter((track) => ids.has(track.id));
-    }
-
-    return tracks.filter(viewFilters[activeView]);
-  }, [activeView, playlistState, recentTracks, tracks]);
-  const playlistSearchTracks = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-
-    if (!needle) {
-      return [];
-    }
-
-    const playlistTrackIds = new Set(
-      Object.values(playlistState)
-        .filter((playlist) => [playlist.name, playlist.description, playlist.kicker].join(' ').toLowerCase().includes(needle))
-        .flatMap((playlist) => playlist.trackIds),
-    );
-
-    return tracks.filter((track) => playlistTrackIds.has(track.id));
-  }, [playlistState, query, tracks]);
-  const filteredTracks = useMemo(() => {
-    const directMatches = filterTracks(viewTracks, query);
-
-    if (!query.trim() || playlistSearchTracks.length === 0) {
-      return directMatches;
-    }
-
-    const directMatchIds = new Set(directMatches.map((track) => track.id));
-    return [...directMatches, ...playlistSearchTracks.filter((track) => !directMatchIds.has(track.id))];
-  }, [playlistSearchTracks, query, viewTracks]);
-  const playbackQueue = useMemo(
-    () => (filteredTracks.length > 0 ? filteredTracks : viewTracks.length > 0 ? viewTracks : tracks),
-    [filteredTracks, tracks, viewTracks],
-  );
-  const upcomingTracks = useMemo(() => {
-    const queueIndex = playbackQueue.findIndex((track) => track.id === currentTrackId);
-
-    if (playbackQueue.length <= 1 && queueIndex !== -1) {
-      return [];
-    }
-
-    const currentIndex = queueIndex === -1 ? -1 : queueIndex;
-    return [1, 2]
-      .map((offset) => playbackQueue[(currentIndex + offset) % playbackQueue.length])
-      .filter((track, index, queue) => track.id !== currentTrackId && queue.findIndex((queuedTrack) => queuedTrack.id === track.id) === index);
-  }, [currentTrackId, playbackQueue]);
+  const filteredTracks = useMemo(() => filterTracks(tracks, query), [tracks, query]);
+  const playbackQueue = useMemo(() => (filteredTracks.length > 0 ? filteredTracks : tracks), [filteredTracks, tracks]);
   const currentTrack = tracks.find((track) => track.id === currentTrackId) ?? tracks[0];
-  const isActiveUserPlaylist = isPlaylistView(activeView) && isUserPlaylistView(activeView);
-  const activeUserPlaylistHasCurrentTrack = isActiveUserPlaylist
-    ? Boolean(playlistState[activeView]?.trackIds.includes(currentTrack.id))
-    : false;
   const canRemoveCurrentLocalTrack = currentTrack.source === 'local' && Boolean(currentTrack.filePath || currentTrack.audioUrl);
   const canRevealCurrentLocalTrack = Boolean(currentTrack.filePath && window.teaMusicBackend?.revealLocalAudioFile);
-  const activeCopy = isPlaylistView(activeView)
-    ? { title: playlistState[activeView]?.name ?? '播放列表', description: playlistState[activeView]?.description ?? '这个播放列表还没有歌曲' }
-    : viewCopy[activeView];
-  const activeKicker = isPlaylistView(activeView) ? playlistState[activeView]?.kicker ?? '播放列表' : viewKicker[activeView];
-  const emptyState = isPlaylistView(activeView)
-    ? {
-        message: activeView === 'playlist:similar' ? '还没有足够相似的歌曲' : '这个播放列表还没有歌曲',
-        canResolve: false,
-      }
-    : {
-        message: query.trim() ? '当前曲库没有这首歌' : '这里还没有歌曲',
-        canResolve: false,
-      };
 
   useEffect(() => {
     let isMounted = true;
@@ -747,10 +497,6 @@ export function App() {
     }
   }, [currentTrack.audioUrl, currentTrackId, isPlaying]);
 
-  useEffect(() => {
-    persistPlaylists(playlistState);
-  }, [playlistState]);
-
   function importLocalFiles(files: File[]) {
     const audioTracks = files
       .filter((file) => file.type.startsWith('audio/') || /\.(mp3|flac|wav|m4a|aac|ogg|aif|aiff|alac)$/i.test(file.name))
@@ -766,7 +512,6 @@ export function App() {
 
     setTracks((existingTracks) => mergeTracksById(audioTracks, existingTracks));
     setCurrentTrackId(audioTracks[0].id);
-    setActiveView('local');
   }
 
   function handleLocalFiles(event: ChangeEvent<HTMLInputElement>) {
@@ -798,7 +543,6 @@ export function App() {
 
     setTracks((existingTracks) => mergeTracksById(localTracks, existingTracks));
     setCurrentTrackId(localTracks[0].id);
-    setActiveView('local');
   }
 
   async function runOnlineSearch() {
@@ -1033,17 +777,19 @@ export function App() {
       }
 
       if (event.key === 'Escape') {
-        if (isQueueOpen || isTrackMenuOpen) {
+        if (isTrackMenuOpen || isLibraryMenuOpen || isSearchOpen || isFinderOpen) {
           event.preventDefault();
-          setIsQueueOpen(false);
           setIsTrackMenuOpen(false);
+          setIsLibraryMenuOpen(false);
+          setIsSearchOpen(false);
+          setIsFinderOpen(false);
         }
         return;
       }
 
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
         event.preventDefault();
-        searchInputRef.current?.focus();
+        setIsSearchOpen(true);
         return;
       }
 
@@ -1081,84 +827,6 @@ export function App() {
     return () => window.removeEventListener('keydown', handlePlaybackShortcut);
   });
 
-  function addCurrentTrackToTodayLoop() {
-    setPlaylistState((existingPlaylists) => {
-      const todayLoop = existingPlaylists['playlist:daily'];
-
-      if (todayLoop.trackIds.includes(currentTrack.id)) {
-        return existingPlaylists;
-      }
-
-      return {
-        ...existingPlaylists,
-        'playlist:daily': {
-          ...todayLoop,
-          trackIds: [...todayLoop.trackIds, currentTrack.id],
-        },
-      };
-    });
-  }
-
-  function createUserPlaylistFromCurrentTrack() {
-    const nextIndex = Object.keys(playlistState).filter((playlistId) => isUserPlaylistView(playlistId)).length + 1;
-    const playlistId = `playlist:user:${Date.now()}` as UserPlaylistView;
-
-    setPlaylistState((existingPlaylists) => ({
-      ...existingPlaylists,
-      [playlistId]: {
-        name: `我的歌单 ${nextIndex}`,
-        description: '自己创建的听歌队列',
-        kicker: '我的歌单',
-        trackIds: [currentTrack.id],
-      },
-    }));
-    setActiveView(playlistId);
-  }
-
-  function removeCurrentTrackFromActiveUserPlaylist() {
-    if (!isActiveUserPlaylist) {
-      return;
-    }
-
-    setPlaylistState((existingPlaylists) => {
-      const playlist = existingPlaylists[activeView];
-
-      if (!playlist) {
-        return existingPlaylists;
-      }
-
-      return {
-        ...existingPlaylists,
-        [activeView]: {
-          ...playlist,
-          trackIds: playlist.trackIds.filter((trackId) => trackId !== currentTrack.id),
-        },
-      };
-    });
-  }
-
-  function addCurrentTrackToActiveUserPlaylist() {
-    if (!isActiveUserPlaylist) {
-      return;
-    }
-
-    setPlaylistState((existingPlaylists) => {
-      const playlist = existingPlaylists[activeView];
-
-      if (!playlist || playlist.trackIds.includes(currentTrack.id)) {
-        return existingPlaylists;
-      }
-
-      return {
-        ...existingPlaylists,
-        [activeView]: {
-          ...playlist,
-          trackIds: [...playlist.trackIds, currentTrack.id],
-        },
-      };
-    });
-  }
-
   async function removeCurrentLocalTrack() {
     if (!canRemoveCurrentLocalTrack) {
       return;
@@ -1176,17 +844,6 @@ export function App() {
     }
 
     setTracks((existingTracks) => existingTracks.filter((track) => track.id !== removedTrack.id));
-    setPlaylistState((existingPlaylists) =>
-      Object.fromEntries(
-        Object.entries(existingPlaylists).map(([playlistId, playlist]) => [
-          playlistId,
-          {
-            ...playlist,
-            trackIds: playlist.trackIds.filter((trackId) => trackId !== removedTrack.id),
-          },
-        ]),
-      ) as PlaylistState,
-    );
 
     if (currentTrackId === removedTrack.id) {
       pausePlayback();
@@ -1201,20 +858,6 @@ export function App() {
     }
 
     await window.teaMusicBackend.revealLocalAudioFile(currentTrack.filePath);
-  }
-
-  function playMoreSimilar() {
-    const similarTrackIds = buildSimilarTrackIds(tracks, currentTrack);
-
-    setPlaylistState((existingPlaylists) => ({
-      ...existingPlaylists,
-      'playlist:similar': {
-        ...existingPlaylists['playlist:similar'],
-        trackIds: similarTrackIds,
-      },
-    }));
-    setQuery('');
-    setActiveView('playlist:similar');
   }
 
   function cyclePlaybackMode() {
@@ -1244,168 +887,98 @@ export function App() {
     >
       <div aria-hidden="true" className="app-backdrop" />
       {isDragActive ? <div className="drop-hint">松开导入到本地音乐</div> : null}
-      <aside className="sidebar glass-panel">
-        <div aria-hidden="true" className="window-controls">
-          {shouldRenderDecorativeWindowControls() ? (
-            <>
-              <span className="window-dot close" />
-              <span className="window-dot minimize" />
-              <span className="window-dot zoom" />
-            </>
-          ) : null}
-        </div>
-        <div className="brand">
-          <span className="brand-mark">汽</span>
-          <span>汽水音乐</span>
-        </div>
-
-        <nav className="nav-list" aria-label="主导航">
-          {navItems.map(({ key, label, icon: Icon }) => (
-            <button className={activeView === key ? 'nav-item active' : 'nav-item'} key={label} onClick={() => setActiveView(key)}>
-              <Icon size={17} strokeWidth={2.2} />
-              <span>{label}</span>
-            </button>
-          ))}
-        </nav>
-
-        <section className="playlist-section">
-          <p className="section-kicker">播放列表</p>
-          <button
-            className={activeView === 'playlist:daily' ? 'playlist-pill active' : 'playlist-pill'}
-            onClick={() => setActiveView('playlist:daily')}
-          >
-            今日循环
-          </button>
-          <button
-            className={activeView === 'playlist:night' ? 'playlist-pill active' : 'playlist-pill'}
-            onClick={() => setActiveView('playlist:night')}
-          >
-            深夜不跳歌
-          </button>
-          {recentTracks.length > 0 ? (
-            <button
-              className={activeView === 'playlist:recent' ? 'playlist-pill active' : 'playlist-pill'}
-              onClick={() => setActiveView('playlist:recent')}
-            >
-              最近播放
-            </button>
-          ) : null}
-          {playlistState['playlist:similar'].trackIds.length > 0 ? (
-            <button
-              className={activeView === 'playlist:similar' ? 'playlist-pill active' : 'playlist-pill'}
-              onClick={() => setActiveView('playlist:similar')}
-            >
-              相似推荐
-            </button>
-          ) : null}
-          {Object.entries(playlistState)
-            .filter(([playlistId]) => isUserPlaylistView(playlistId))
-            .map(([playlistId, playlist]) => (
-              <button
-                className={activeView === playlistId ? 'playlist-pill active' : 'playlist-pill'}
-                key={playlistId}
-                onClick={() => setActiveView(playlistId as UserPlaylistView)}
-              >
-                {playlist.name}
-              </button>
-            ))}
-        </section>
-
-        <button className="finder-entry" onClick={() => setIsFinderOpen(true)} aria-label="在线找歌">
-          <CloudDownload size={15} strokeWidth={2.2} />
-        </button>
-      </aside>
-
       <header className="topbar">
-        <label className="search-box">
+        <span className="app-title">汽水音乐</span>
+        <button
+          aria-label="菜单"
+          className={isLibraryMenuOpen ? 'lib-menu-btn active' : 'lib-menu-btn'}
+          onClick={() => setIsLibraryMenuOpen((open) => !open)}
+        >
+          <Menu size={18} />
+        </button>
+        {isLibraryMenuOpen ? (
+          <>
+            <div aria-hidden="true" className="menu-scrim" onClick={() => setIsLibraryMenuOpen(false)} />
+            <div className="lib-menu glass-panel" role="menu">
+              <button onClick={() => { setIsSearchOpen(true); setIsLibraryMenuOpen(false); }}>搜索</button>
+              <button onClick={() => { void handleLocalImportClick(); setIsLibraryMenuOpen(false); }}>导入本地音乐</button>
+              <button onClick={() => { setIsFinderOpen(true); setIsLibraryMenuOpen(false); }}>在线找歌</button>
+            </div>
+          </>
+        ) : null}
+        <input
+          ref={localFileInputRef}
+          aria-label="添加本地音乐"
+          className="visually-hidden"
+          type="file"
+          accept="audio/*,.mp3,.flac,.wav,.m4a,.aac,.ogg,.aif,.aiff,.alac"
+          multiple
+          onChange={handleLocalFiles}
+        />
+      </header>
+
+      {isSearchOpen ? (
+        <div className="search-bar">
           <Search size={15} />
           <input
             ref={searchInputRef}
-            placeholder="搜索歌曲、歌手、歌单"
+            autoFocus
+            placeholder="搜索歌曲、歌手"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Escape') {
                 setQuery('');
+                setIsSearchOpen(false);
               }
             }}
           />
-          {query ? (
-            <button
-              aria-label="清除搜索"
-              className="search-clear"
-              type="button"
-              onClick={() => {
-                setQuery('');
-                searchInputRef.current?.focus();
-              }}
-            >
-              <X size={14} />
-            </button>
-          ) : null}
-        </label>
-      </header>
+          <button aria-label="关闭搜索" onClick={() => { setQuery(''); setIsSearchOpen(false); }}>
+            <X size={14} />
+          </button>
+        </div>
+      ) : null}
 
       <main className="content">
-        <div className="content-head">
-          <h2>{activeCopy.title}</h2>
-          <button className="quiet-action local-import" onClick={() => void handleLocalImportClick()}>
-            <Upload size={15} />
-            <span>添加本地音乐</span>
-          </button>
-          <input
-            ref={localFileInputRef}
-            aria-label="添加本地音乐"
-            className="visually-hidden"
-            type="file"
-            accept="audio/*,.mp3,.flac,.wav,.m4a,.aac,.ogg,.aif,.aiff,.alac"
-            multiple
-            onChange={handleLocalFiles}
-          />
+        <div className="track-list" aria-label="歌曲列表">
+          {filteredTracks.map((track) => {
+            const badge = getTrackBadge(track);
+
+            return (
+              <button
+                className={track.id === currentTrack?.id ? 'track-row active' : 'track-row'}
+                key={track.id}
+                onClick={() => selectTrack(track)}
+                onDoubleClick={() => selectTrack(track, { keepPlaying: true })}
+              >
+                {track.id === currentTrack?.id && isPlaying ? (
+                  <span aria-hidden="true" className="playing-bars">
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                ) : (
+                  <span aria-hidden="true" className="track-bullet" />
+                )}
+                <div>
+                  <strong>{track.title}</strong>
+                  <span>{getTrackSubtitle(track)}</span>
+                </div>
+                {badge ? <em>{badge}</em> : null}
+              </button>
+            );
+          })}
+          {filteredTracks.length === 0 ? (
+            <div className="empty-state">
+              <Music2 size={18} />
+              <span>{query.trim() ? '没有匹配的歌曲' : '还没有歌曲'}</span>
+            </div>
+          ) : null}
         </div>
-
-        <section className="library-strip glass-panel">
-          <div className="track-list" aria-label="歌曲列表">
-            {filteredTracks.map((track) => {
-              const badge = getTrackBadge(track);
-
-              return (
-                <button
-                  className={track.id === currentTrack?.id ? 'track-row active' : 'track-row'}
-                  key={track.id}
-                  onClick={() => selectTrack(track)}
-                  onDoubleClick={() => selectTrack(track, { keepPlaying: true })}
-                >
-                  {track.id === currentTrack?.id && isPlaying ? (
-                    <span aria-hidden="true" className="playing-bars">
-                      <i />
-                      <i />
-                      <i />
-                    </span>
-                  ) : (
-                    <span aria-hidden="true" className="track-bullet" />
-                  )}
-                  <div>
-                    <strong>{track.title}</strong>
-                    <span>{getTrackSubtitle(track)}</span>
-                  </div>
-                  {badge ? <em>{badge}</em> : null}
-                </button>
-              );
-            })}
-            {filteredTracks.length === 0 ? (
-              <div className="empty-state">
-                <Music2 size={18} />
-                <span>{emptyState.message}</span>
-              </div>
-            ) : null}
-          </div>
-        </section>
       </main>
 
       <footer className="player-bar glass-panel">
         <section className="now-playing" aria-label="当前播放">
-          <TrackArtwork className="album-art" track={currentTrack} />
           <div className="now-playing-meta">
             <h2>{currentTrack.title}</h2>
             <span>
@@ -1414,69 +987,13 @@ export function App() {
             </span>
           </div>
           <button
-            aria-label={currentTrack.liked ? '底部取消喜欢当前歌曲' : '底部喜欢当前歌曲'}
+            aria-label={currentTrack.liked ? '取消喜欢当前歌曲' : '喜欢当前歌曲'}
             className={currentTrack.liked ? 'mini-like active' : 'mini-like'}
             onClick={toggleCurrentTrackLike}
           >
-            <Heart size={16} fill={currentTrack.liked ? 'currentColor' : 'none'} />
+            <Heart size={18} fill={currentTrack.liked ? 'currentColor' : 'none'} />
           </button>
-          <button
-            aria-label="更多操作"
-            className={isTrackMenuOpen ? 'track-menu-btn active' : 'track-menu-btn'}
-            onClick={() => setIsTrackMenuOpen((open) => !open)}
-          >
-            <MoreHorizontal size={16} />
-          </button>
-          {isTrackMenuOpen ? (
-            <>
-              <div aria-hidden="true" className="track-menu-scrim" onClick={() => setIsTrackMenuOpen(false)} />
-              <div className="track-menu glass-panel" role="menu">
-                <button onClick={() => { createUserPlaylistFromCurrentTrack(); setIsTrackMenuOpen(false); }}>新建歌单</button>
-                <button aria-label="加入今日循环" onClick={() => { addCurrentTrackToTodayLoop(); setIsTrackMenuOpen(false); }}>加入今日循环</button>
-                {isActiveUserPlaylist && !activeUserPlaylistHasCurrentTrack ? (
-                  <button aria-label="加入当前歌单" onClick={() => { addCurrentTrackToActiveUserPlaylist(); setIsTrackMenuOpen(false); }}>加入当前歌单</button>
-                ) : null}
-                {isActiveUserPlaylist && activeUserPlaylistHasCurrentTrack ? (
-                  <button aria-label="从当前歌单移除" onClick={() => { removeCurrentTrackFromActiveUserPlaylist(); setIsTrackMenuOpen(false); }}>从当前歌单移除</button>
-                ) : null}
-                {canRemoveCurrentLocalTrack ? (
-                  <button aria-label="移出本地音乐" onClick={() => { void removeCurrentLocalTrack(); setIsTrackMenuOpen(false); }}>移出本地音乐</button>
-                ) : null}
-                {canRevealCurrentLocalTrack ? (
-                  <button aria-label="在访达中显示" onClick={() => { void revealCurrentLocalTrack(); setIsTrackMenuOpen(false); }}>在访达中显示</button>
-                ) : null}
-                <button onClick={() => { playMoreSimilar(); setIsTrackMenuOpen(false); }}>播放更多相似</button>
-              </div>
-            </>
-          ) : null}
         </section>
-
-        <div className="transport">
-          <button
-            aria-label={`播放模式：${playbackModeCopy[playbackMode]}`}
-            className={playbackMode === 'queue' ? '' : 'mode-active'}
-            onClick={cyclePlaybackMode}
-          >
-            <ModeIcon size={18} />
-          </button>
-          <button aria-label="上一首" onClick={() => moveInQueue('previous')}>
-            <SkipBack size={18} fill="currentColor" />
-          </button>
-          <button className="play-button" aria-label={isPlaying ? '暂停' : '播放'} onClick={togglePlayback}>
-            {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}
-          </button>
-          <button aria-label="下一首" onClick={skipToNextTrack}>
-            <SkipForward size={18} fill="currentColor" />
-          </button>
-          <button
-            aria-label={`睡眠定时：${sleepTimerLabel}`}
-            className={sleepTimerMinutes ? 'mode-active' : ''}
-            title={`睡眠定时：${sleepTimerLabel}`}
-            onClick={cycleSleepTimer}
-          >
-            <Timer size={18} />
-          </button>
-        </div>
 
         <div className="progress-area">
           <span>{formatPlaybackTime(playbackTime.current)}</span>
@@ -1490,25 +1007,61 @@ export function App() {
             onChange={(event) => handleSeekChange(Number(event.target.value))}
           />
           <span>{formatPlaybackTime(playbackTime.duration)}</span>
-          <button aria-label={volume > 0 ? '静音' : '取消静音'} className="volume-button" onClick={toggleMute}>
-            {volume > 0 ? <Volume2 size={18} /> : <VolumeX size={18} />}
-          </button>
-          <input
-            aria-label="音量"
-            className="volume-slider"
-            max="100"
-            min="0"
-            type="range"
-            value={volume}
-            onChange={(event) => handleVolumeChange(Number(event.target.value))}
-          />
+        </div>
+
+        <div className="transport">
           <button
-            aria-label="播放队列"
-            className={isQueueOpen ? 'queue-toggle mode-active' : 'queue-toggle'}
-            onClick={() => setIsQueueOpen((open) => !open)}
+            aria-label={`播放模式：${playbackModeCopy[playbackMode]}`}
+            className={playbackMode === 'queue' ? '' : 'mode-active'}
+            onClick={cyclePlaybackMode}
           >
-            <ListMusic size={18} />
+            <ModeIcon size={18} />
           </button>
+          <button aria-label="上一首" onClick={() => moveInQueue('previous')}>
+            <SkipBack size={18} fill="currentColor" />
+          </button>
+          <button className="play-button" aria-label={isPlaying ? '暂停' : '播放'} onClick={togglePlayback}>
+            {isPlaying ? <Pause size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" />}
+          </button>
+          <button aria-label="下一首" onClick={skipToNextTrack}>
+            <SkipForward size={18} fill="currentColor" />
+          </button>
+          <button
+            aria-label="更多操作"
+            className={isTrackMenuOpen ? 'track-menu-btn active' : 'track-menu-btn'}
+            onClick={() => setIsTrackMenuOpen((open) => !open)}
+          >
+            <MoreHorizontal size={18} />
+          </button>
+          {isTrackMenuOpen ? (
+            <>
+              <div aria-hidden="true" className="menu-scrim" onClick={() => setIsTrackMenuOpen(false)} />
+              <div className="track-menu glass-panel" role="menu">
+                <div className="menu-volume">
+                  <button aria-label={volume > 0 ? '静音' : '取消静音'} onClick={toggleMute}>
+                    {volume > 0 ? <Volume2 size={16} /> : <VolumeX size={16} />}
+                  </button>
+                  <input
+                    aria-label="音量"
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={volume}
+                    onChange={(event) => handleVolumeChange(Number(event.target.value))}
+                  />
+                </div>
+                <button aria-label={`睡眠定时：${sleepTimerLabel}`} onClick={cycleSleepTimer}>
+                  睡眠定时：{sleepTimerLabel}
+                </button>
+                {canRemoveCurrentLocalTrack ? (
+                  <button aria-label="移出本地音乐" onClick={() => { void removeCurrentLocalTrack(); setIsTrackMenuOpen(false); }}>移出本地音乐</button>
+                ) : null}
+                {canRevealCurrentLocalTrack ? (
+                  <button aria-label="在访达中显示" onClick={() => { void revealCurrentLocalTrack(); setIsTrackMenuOpen(false); }}>在访达中显示</button>
+                ) : null}
+              </div>
+            </>
+          ) : null}
         </div>
         <audio
           ref={audioRef}
@@ -1570,42 +1123,6 @@ export function App() {
         </div>
       ) : null}
 
-      {isQueueOpen ? (
-        <>
-          <div aria-hidden="true" className="queue-scrim" onClick={() => setIsQueueOpen(false)} />
-          <aside className="queue-drawer glass-panel" aria-label="播放队列面板">
-            <header className="queue-drawer-head">
-              <div>
-                <p className="section-kicker">播放队列</p>
-                <h2>{playbackQueue.length} 首在队列中</h2>
-              </div>
-              <button aria-label="关闭播放队列" className="queue-drawer-close" onClick={() => setIsQueueOpen(false)}>
-                <X size={18} />
-              </button>
-            </header>
-            <div className="queue-drawer-list">
-              {playbackQueue.map((track) => {
-                const badge = getTrackBadge(track);
-                const isCurrent = track.id === currentTrack.id;
-
-                return (
-                  <button
-                    className={isCurrent ? 'queue-drawer-row active' : 'queue-drawer-row'}
-                    key={track.id}
-                    onClick={() => selectTrack(track, { keepPlaying: true })}
-                  >
-                    <div>
-                      <strong>{track.title}</strong>
-                      <span>{getTrackSubtitle(track)}</span>
-                    </div>
-                    {isCurrent ? <em className="queue-now">正在播放</em> : badge ? <em>{badge}</em> : null}
-                  </button>
-                );
-              })}
-            </div>
-          </aside>
-        </>
-      ) : null}
     </div>
   );
 }

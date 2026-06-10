@@ -10,24 +10,32 @@ describe('App shell', () => {
     window.localStorage.clear();
   });
 
-  it('renders pure music navigation only', () => {
+  function importViaMenu() {
+    fireEvent.click(screen.getByLabelText('菜单'));
+    fireEvent.click(screen.getByText('导入本地音乐'));
+  }
+
+  function openSearch() {
+    fireEvent.click(screen.getByLabelText('菜单'));
+    fireEvent.click(screen.getByText('搜索'));
+  }
+
+  function openPlayerMenu() {
+    fireEvent.click(screen.getByLabelText('更多操作'));
+  }
+
+  it('renders a single-screen minimal player without sidebar or playlists', () => {
     render(<App />);
 
-    expect(document.querySelector('.window-controls')).toBeInTheDocument();
-    expect(screen.getByText('发现')).toBeInTheDocument();
-    expect(screen.getByText('曲库')).toBeInTheDocument();
-    expect(screen.getByText('本地音乐')).toBeInTheDocument();
-    expect(screen.getByText('我喜欢')).toBeInTheDocument();
+    expect(screen.getByText('汽水音乐')).toBeInTheDocument();
+    expect(screen.getByLabelText('歌曲列表')).toBeInTheDocument();
+    expect(screen.getByLabelText('当前播放')).toBeInTheDocument();
 
-    expect(screen.queryByText('社区')).not.toBeInTheDocument();
-    expect(screen.queryByText('评论')).not.toBeInTheDocument();
-    expect(screen.queryByText('关注')).not.toBeInTheDocument();
-    expect(screen.queryByText('动态')).not.toBeInTheDocument();
-    expect(screen.queryByText('会员')).not.toBeInTheDocument();
-    expect(screen.queryByText('充值')).not.toBeInTheDocument();
-    expect(screen.queryByText('商城')).not.toBeInTheDocument();
-    expect(screen.queryByText('下载中心')).not.toBeInTheDocument();
-    expect(screen.queryByText('发布视频')).not.toBeInTheDocument();
+    expect(screen.queryByText('发现')).not.toBeInTheDocument();
+    expect(screen.queryByText('我喜欢')).not.toBeInTheDocument();
+    expect(screen.queryByText('今日循环')).not.toBeInTheDocument();
+    expect(screen.queryByText('播放列表')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('播放队列面板')).not.toBeInTheDocument();
   });
 
   it('adds local audio to the unified library with a special badge', () => {
@@ -82,7 +90,7 @@ describe('App shell', () => {
       chooseLocalAudioFiles,    };
 
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: '添加本地音乐' }));
+    importViaMenu();
 
     await waitFor(() => {
       expect(chooseLocalAudioFiles).toHaveBeenCalledTimes(1);
@@ -104,12 +112,12 @@ describe('App shell', () => {
       chooseLocalAudioFiles,    };
 
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: '添加本地音乐' }));
+    importViaMenu();
     await waitFor(() => {
       expect(within(screen.getByLabelText('歌曲列表')).getByText('玻璃夜航')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: '添加本地音乐' }));
+    importViaMenu();
     await waitFor(() => {
       expect(within(screen.getByLabelText('歌曲列表')).getAllByText('玻璃夜航')).toHaveLength(1);
     });
@@ -127,13 +135,13 @@ describe('App shell', () => {
       chooseLocalAudioFiles,    };
 
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: '添加本地音乐' }));
+    importViaMenu();
     await waitFor(() => {
       expect(within(screen.getByLabelText('歌曲列表')).getByText('手动喜欢还在')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: '我喜欢' }));
-    expect(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /手动喜欢还在/ })).toBeInTheDocument();
+    fireEvent.click(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /手动喜欢还在/ }));
+    expect(screen.getByLabelText('取消喜欢当前歌曲')).toBeInTheDocument();
 
     delete window.teaMusicBackend;
   });
@@ -148,7 +156,6 @@ describe('App shell', () => {
       removeLocalAudioFile,    };
 
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: '本地音乐' }));
     await waitFor(() => {
       expect(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /移出测试/ })).toBeInTheDocument();
     });
@@ -180,7 +187,6 @@ describe('App shell', () => {
       revealLocalAudioFile,    };
 
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: '本地音乐' }));
     await waitFor(() => {
       expect(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /访达定位/ })).toBeInTheDocument();
     });
@@ -206,22 +212,6 @@ describe('App shell', () => {
     expect(shell.style.getPropertyValue('--app-cover')).toContain('url(');
   });
 
-  it('opens the play queue drawer and plays a track from it', () => {
-    render(<App />);
-
-    expect(screen.queryByLabelText('播放队列面板')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByLabelText('播放队列'));
-    const queuePanel = screen.getByLabelText('播放队列面板');
-    expect(within(queuePanel).getByRole('button', { name: /感谢你爱我/ })).toBeInTheDocument();
-
-    fireEvent.click(within(queuePanel).getByRole('button', { name: /晴夜漫游/ }));
-    expect(within(screen.getByLabelText('当前播放')).getByRole('heading', { name: '晴夜漫游' })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByLabelText('关闭播放队列'));
-    expect(screen.queryByLabelText('播放队列面板')).not.toBeInTheDocument();
-  });
-
   it('opens the hidden finder and downloads an online track into the library', async () => {
     const downloadOnline = vi.fn(async () => ({
       filePath: 'D:/Music/TeaMusic/Resolved/周杰伦/晴天-周杰伦.mp3',
@@ -237,7 +227,8 @@ describe('App shell', () => {
     };
 
     render(<App />);
-    fireEvent.click(screen.getByLabelText('在线找歌'));
+    fireEvent.click(screen.getByLabelText('菜单'));
+    fireEvent.click(screen.getByText('在线找歌'));
     const finderInput = screen.getByPlaceholderText('歌名或歌手，回车搜索');
     fireEvent.change(finderInput, { target: { value: '晴天' } });
     fireEvent.keyDown(finderInput, { key: 'Enter' });
@@ -270,7 +261,9 @@ describe('App shell', () => {
     };
 
     render(<App />);
-    const search = screen.getByPlaceholderText('搜索歌曲、歌手、歌单');
+    fireEvent.click(screen.getByLabelText('菜单'));
+    fireEvent.click(screen.getByText('搜索'));
+    const search = screen.getByPlaceholderText('搜索歌曲、歌手');
     fireEvent.change(search, { target: { value: '不存在的歌' } });
     fireEvent.keyDown(search, { key: 'Enter' });
 
@@ -293,12 +286,6 @@ describe('App shell', () => {
     expect(within(screen.getByLabelText('当前播放')).getByRole('heading', { name: '晴夜漫游' })).toBeInTheDocument();
     expect(screen.getByLabelText('暂停')).toBeInTheDocument();
     expect(document.querySelector('.playing-bars')).toBeInTheDocument();
-  });
-
-  it('renders real cover artwork when a track provides coverUrl', () => {
-    render(<App />);
-
-    expect(screen.getAllByAltText('感谢你爱我 封面').length).toBeGreaterThan(0);
   });
 
   it('moves through the queue with transport controls', () => {
@@ -467,7 +454,8 @@ describe('App shell', () => {
   it('does not trigger playback shortcuts while typing in search', () => {
     render(<App />);
 
-    const search = screen.getByPlaceholderText('搜索歌曲、歌手、歌单');
+    openSearch();
+    const search = screen.getByPlaceholderText('搜索歌曲、歌手');
     search.focus();
     fireEvent.keyDown(search, { key: ' ', code: 'Space' });
     fireEvent.keyDown(search, { key: 'ArrowRight' });
@@ -476,104 +464,31 @@ describe('App shell', () => {
     expect(within(screen.getByLabelText('当前播放')).getByRole('heading', { name: '感谢你爱我' })).toBeInTheDocument();
   });
 
-  it('clears the search query with the inline clear button', () => {
+  it('filters the unified list from the search box and closes it', () => {
     render(<App />);
 
-    const search = screen.getByPlaceholderText('搜索歌曲、歌手、歌单') as HTMLInputElement;
-    expect(screen.queryByLabelText('清除搜索')).not.toBeInTheDocument();
-
+    openSearch();
+    const search = screen.getByPlaceholderText('搜索歌曲、歌手') as HTMLInputElement;
     fireEvent.change(search, { target: { value: '感谢' } });
-    expect(screen.getByLabelText('清除搜索')).toBeInTheDocument();
+    expect(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /感谢你爱我/ })).toBeInTheDocument();
+    expect(within(screen.getByLabelText('歌曲列表')).queryByRole('button', { name: /晴夜漫游/ })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText('清除搜索'));
-    expect(search.value).toBe('');
-    expect(screen.queryByLabelText('清除搜索')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('关闭搜索'));
+    expect(screen.queryByPlaceholderText('搜索歌曲、歌手')).not.toBeInTheDocument();
+    expect(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /晴夜漫游/ })).toBeInTheDocument();
   });
 
-  it('focuses and clears search with desktop shortcuts', () => {
+  it('opens search with the desktop shortcut and clears it with Escape', () => {
     render(<App />);
 
-    const search = screen.getByPlaceholderText('搜索歌曲、歌手、歌单') as HTMLInputElement;
     fireEvent.keyDown(window, { key: 'f', metaKey: true });
-    expect(document.activeElement).toBe(search);
+    const search = screen.getByPlaceholderText('搜索歌曲、歌手') as HTMLInputElement;
 
     fireEvent.change(search, { target: { value: '感谢' } });
     expect(search.value).toBe('感谢');
 
     fireEvent.keyDown(search, { key: 'Escape' });
-    expect(search.value).toBe('');
-  });
-
-  it('switches pure music library views from the sidebar', () => {
-    render(<App />);
-
-    fireEvent.click(screen.getByRole('button', { name: '本地音乐' }));
-    expect(screen.getByRole('heading', { name: '本地音乐' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /感谢你爱我/ })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /当发现互相都在躲/ })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: '我喜欢' }));
-    expect(screen.getByRole('heading', { name: '我喜欢' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /感谢你爱我/ })).toBeInTheDocument();
-  });
-
-  it('switches into user playlists from the sidebar', () => {
-    render(<App />);
-
-    fireEvent.click(screen.getByRole('button', { name: '今日循环' }));
-    expect(screen.getByRole('heading', { name: '今日循环' })).toBeInTheDocument();
-    expect(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /感谢你爱我/ })).toBeInTheDocument();
-    expect(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /晴夜漫游/ })).toBeInTheDocument();
-    expect(within(screen.getByLabelText('歌曲列表')).queryByRole('button', { name: /当发现互相都在躲/ })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: '深夜不跳歌' }));
-    expect(screen.getByRole('heading', { name: '深夜不跳歌' })).toBeInTheDocument();
-    expect(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /当发现互相都在躲/ })).toBeInTheDocument();
-  });
-
-  it('searches playlist names from the unified search box', async () => {
-    const searchOnline = vi.fn(async () => []);
-    window.teaMusicBackend = {
-      scanResolvedLibrary: async () => [],
-      scanLocalLibrary: async () => [],
-      chooseLocalAudioFiles: async () => [],
-      searchOnline,
-      downloadOnline: async () => ({ error: 'noop' }),
-    };
-
-    render(<App />);
-    fireEvent.change(screen.getByPlaceholderText('搜索歌曲、歌手、歌单'), { target: { value: '深夜不跳歌' } });
-
-    expect(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /当发现互相都在躲/ })).toBeInTheDocument();
-    expect(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /感谢你爱我/ })).toBeInTheDocument();
-    await new Promise((resolve) => {
-      window.setTimeout(resolve, 300);
-    });
-    expect(searchOnline).not.toHaveBeenCalled();
-
-    delete window.teaMusicBackend;
-  });
-
-  it('uses the active playlist as the playback queue', () => {
-    render(<App />);
-
-    fireEvent.click(screen.getByRole('button', { name: '今日循环' }));
-    fireEvent.click(screen.getByLabelText('下一首'));
-
-    expect(within(screen.getByLabelText('当前播放')).getByRole('heading', { name: '晴夜漫游' })).toBeInTheDocument();
-  });
-
-  it('shows a recent listening queue ordered by play time', () => {
-    render(<App />);
-
-    fireEvent.click(screen.getByLabelText('下一首'));
-    fireEvent.click(screen.getByLabelText('下一首'));
-    fireEvent.click(screen.getByRole('button', { name: '最近播放' }));
-
-    expect(screen.getByRole('heading', { name: '最近播放' })).toBeInTheDocument();
-    const recentRows = within(screen.getByLabelText('歌曲列表')).getAllByRole('button');
-    expect(recentRows[0]).toHaveTextContent('晴夜漫游');
-    expect(recentRows[1]).toHaveTextContent('当发现互相都在躲');
+    expect(screen.queryByPlaceholderText('搜索歌曲、歌手')).not.toBeInTheDocument();
   });
 
   it('persists the playback mode across app restarts', () => {
@@ -612,6 +527,7 @@ describe('App shell', () => {
   it('cycles the sleep timer from off through focused listening presets', () => {
     render(<App />);
 
+    openPlayerMenu();
     fireEvent.click(screen.getByLabelText('睡眠定时：关闭'));
     expect(screen.getByLabelText('睡眠定时：15 分钟')).toBeInTheDocument();
 
@@ -630,6 +546,7 @@ describe('App shell', () => {
     render(<App />);
 
     fireEvent.click(screen.getByLabelText('播放'));
+    openPlayerMenu();
     fireEvent.click(screen.getByLabelText('睡眠定时：关闭'));
     Object.defineProperty(document.querySelector('audio') as HTMLAudioElement, 'pause', {
       configurable: true,
@@ -644,156 +561,27 @@ describe('App shell', () => {
     expect(screen.getByLabelText('睡眠定时：关闭')).toBeInTheDocument();
   });
 
-  it('shows upcoming tracks from the active playback queue', () => {
-    render(<App />);
-
-    fireEvent.click(screen.getByLabelText('播放队列'));
-    expect(within(screen.getByLabelText('播放队列面板')).getByText('当发现互相都在躲')).toBeInTheDocument();
-  });
-
-  it('previews the first active queue track when current track is outside that queue', () => {
+  it('likes the current track and reflects the liked state', () => {
     render(<App />);
 
     fireEvent.click(screen.getByLabelText('下一首'));
-    fireEvent.click(screen.getByRole('button', { name: '本地音乐' }));
-    fireEvent.click(screen.getByLabelText('播放队列'));
+    expect(within(screen.getByLabelText('当前播放')).getByRole('heading', { name: '当发现互相都在躲' })).toBeInTheDocument();
 
-    expect(within(screen.getByLabelText('播放队列面板')).getByText('感谢你爱我')).toBeInTheDocument();
-  });
-
-  it('adds the current track into Today Loop playlist', () => {
-    render(<App />);
-
-    fireEvent.click(screen.getByLabelText('下一首'));
-    fireEvent.click(screen.getByLabelText('更多操作'));
-    fireEvent.click(screen.getByLabelText('加入今日循环'));
-    fireEvent.click(screen.getByRole('button', { name: '今日循环' }));
-
-    expect(screen.getByRole('button', { name: /当发现互相都在躲/ })).toBeInTheDocument();
-  });
-
-  it('persists user playlist edits across app restarts', () => {
-    const firstSession = render(<App />);
-
-    fireEvent.click(screen.getByLabelText('下一首'));
-    fireEvent.click(screen.getByLabelText('更多操作'));
-    fireEvent.click(screen.getByLabelText('加入今日循环'));
-    firstSession.unmount();
-
-    render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: '今日循环' }));
-
-    expect(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /当发现互相都在躲/ })).toBeInTheDocument();
-  });
-
-  it('creates a user playlist from the current track and persists it', () => {
-    const firstSession = render(<App />);
-
-    fireEvent.click(screen.getByLabelText('下一首'));
-    fireEvent.click(screen.getByLabelText('更多操作'));
-    fireEvent.click(screen.getByRole('button', { name: '新建歌单' }));
-
-    expect(screen.getByRole('heading', { name: '我的歌单 1' })).toBeInTheDocument();
-    expect(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /当发现互相都在躲/ })).toBeInTheDocument();
-    firstSession.unmount();
-
-    render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: '我的歌单 1' }));
-
-    expect(screen.getByRole('heading', { name: '我的歌单 1' })).toBeInTheDocument();
-    expect(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /当发现互相都在躲/ })).toBeInTheDocument();
-  });
-
-  it('removes the current track from a user playlist without deleting it from the library', () => {
-    render(<App />);
-
-    fireEvent.click(screen.getByLabelText('下一首'));
-    fireEvent.click(screen.getByLabelText('更多操作'));
-    fireEvent.click(screen.getByRole('button', { name: '新建歌单' }));
-    fireEvent.click(screen.getByLabelText('更多操作'));
-    fireEvent.click(screen.getByLabelText('从当前歌单移除'));
-
-    expect(screen.getByText('这个播放列表还没有歌曲')).toBeInTheDocument();
-    expect(within(screen.getByLabelText('歌曲列表')).queryByRole('button', { name: /当发现互相都在躲/ })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: '曲库' }));
-    expect(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /当发现互相都在躲/ })).toBeInTheDocument();
-  });
-
-  it('adds the current track into an existing user playlist', () => {
-    render(<App />);
-
-    fireEvent.click(screen.getByLabelText('下一首'));
-    fireEvent.click(screen.getByLabelText('更多操作'));
-    fireEvent.click(screen.getByRole('button', { name: '新建歌单' }));
-    fireEvent.click(screen.getByRole('button', { name: '曲库' }));
-    fireEvent.click(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /晴夜漫游/ }));
-    fireEvent.click(screen.getByRole('button', { name: '我的歌单 1' }));
-    fireEvent.click(screen.getByLabelText('更多操作'));
-    fireEvent.click(screen.getByLabelText('加入当前歌单'));
-
-    const playlistRows = within(screen.getByLabelText('歌曲列表'));
-    expect(playlistRows.getByRole('button', { name: /当发现互相都在躲/ })).toBeInTheDocument();
-    expect(playlistRows.getByRole('button', { name: /晴夜漫游/ })).toBeInTheDocument();
-  });
-
-  it('creates a similar recommendation queue from the current track', () => {
-    render(<App />);
-
-    fireEvent.click(screen.getByLabelText('更多操作'));
-    fireEvent.click(screen.getByRole('button', { name: '播放更多相似' }));
-
-    expect(screen.getByRole('heading', { name: '相似推荐' })).toBeInTheDocument();
-    expect(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /晴夜漫游/ })).toBeInTheDocument();
-    expect(within(screen.getByLabelText('歌曲列表')).queryByRole('button', { name: /当发现互相都在躲/ })).not.toBeInTheDocument();
-  });
-
-  it('keeps skipped tracks out of similar recommendations', () => {
-    render(<App />);
-
-    fireEvent.click(screen.getByLabelText('下一首'));
-    fireEvent.click(screen.getByLabelText('下一首'));
-    fireEvent.click(screen.getByLabelText('下一首'));
-    fireEvent.click(screen.getByLabelText('更多操作'));
-    fireEvent.click(screen.getByRole('button', { name: '播放更多相似' }));
-
-    expect(screen.getByRole('heading', { name: '相似推荐' })).toBeInTheDocument();
-    expect(screen.getByText('还没有足够相似的歌曲')).toBeInTheDocument();
-    expect(within(screen.getByLabelText('歌曲列表')).queryByRole('button', { name: /晴夜漫游/ })).not.toBeInTheDocument();
-  });
-
-  it('keeps empty similar queues quiet instead of exposing completion actions', () => {
-    render(<App />);
-
-    fireEvent.click(screen.getByLabelText('下一首'));
-    fireEvent.click(screen.getByLabelText('更多操作'));
-    fireEvent.click(screen.getByRole('button', { name: '播放更多相似' }));
-
-    expect(screen.getByText('还没有足够相似的歌曲')).toBeInTheDocument();
-    expect(screen.queryByText('尝试曲库补全')).not.toBeInTheDocument();
-  });
-
-  it('likes the current track and makes it appear in favorites', () => {
-    render(<App />);
-
-    fireEvent.click(screen.getByLabelText('下一首'));
-    fireEvent.click(screen.getByLabelText('底部喜欢当前歌曲'));
-    fireEvent.click(screen.getByRole('button', { name: '我喜欢' }));
-
-    expect(screen.getByRole('button', { name: /当发现互相都在躲/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('喜欢当前歌曲'));
+    expect(screen.getByLabelText('取消喜欢当前歌曲')).toBeInTheDocument();
   });
 
   it('persists liked tracks across app restarts', () => {
     const firstSession = render(<App />);
 
     fireEvent.click(screen.getByLabelText('下一首'));
-    fireEvent.click(screen.getByLabelText('底部喜欢当前歌曲'));
+    fireEvent.click(screen.getByLabelText('喜欢当前歌曲'));
     firstSession.unmount();
 
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: '我喜欢' }));
 
-    expect(screen.getByRole('button', { name: /当发现互相都在躲/ })).toBeInTheDocument();
+    expect(within(screen.getByLabelText('当前播放')).getByRole('heading', { name: '当发现互相都在躲' })).toBeInTheDocument();
+    expect(screen.getByLabelText('取消喜欢当前歌曲')).toBeInTheDocument();
   });
 
   it('persists native track play signals across app restarts', async () => {
@@ -822,12 +610,14 @@ describe('App shell', () => {
     const firstSession = render(<App />);
 
     fireEvent.click(screen.getByLabelText('下一首'));
+    openPlayerMenu();
     fireEvent.change(screen.getByLabelText('音量'), { target: { value: '35' } });
     firstSession.unmount();
 
     render(<App />);
 
     expect(within(screen.getByLabelText('当前播放')).getByRole('heading', { name: '当发现互相都在躲' })).toBeInTheDocument();
+    openPlayerMenu();
     expect((screen.getByLabelText('音量') as HTMLInputElement).value).toBe('35');
   });
 
@@ -844,6 +634,7 @@ describe('App shell', () => {
   it('exposes a volume slider for listening control', () => {
     render(<App />);
 
+    openPlayerMenu();
     const volume = screen.getByLabelText('音量') as HTMLInputElement;
     expect(volume.value).toBe('70');
 
@@ -854,6 +645,7 @@ describe('App shell', () => {
   it('mutes and restores the previous volume from the volume button', () => {
     render(<App />);
 
+    openPlayerMenu();
     const volume = () => screen.getByLabelText('音量') as HTMLInputElement;
     expect(volume().value).toBe('70');
 
@@ -867,6 +659,7 @@ describe('App shell', () => {
   it('adjusts the volume with arrow up and down keys', () => {
     render(<App />);
 
+    openPlayerMenu();
     const volume = () => screen.getByLabelText('音量') as HTMLInputElement;
 
     fireEvent.keyDown(window, { key: 'ArrowUp' });
@@ -952,7 +745,6 @@ describe('App shell', () => {
       chooseLocalAudioFiles: async () => [],    };
 
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: '本地音乐' }));
 
     await waitFor(() => {
       expect(within(screen.getByLabelText('歌曲列表')).getByText('重启还在')).toBeInTheDocument();
@@ -982,8 +774,10 @@ describe('App shell', () => {
     await waitFor(() => {
       expect(readLocalArtwork).toHaveBeenCalledWith(filePath);
     });
-    const artwork = screen.getAllByAltText('带封面 封面')[0] as HTMLImageElement;
-    expect(artwork.src).toBe(encodeURI('file:///Users/taomic/Music/TeaMusic/Local/带封面-Taomic.jpg'));
+    await waitFor(() => {
+      const shell = document.querySelector('.app-shell') as HTMLElement;
+      expect(shell.style.getPropertyValue('--app-cover')).toContain('TeaMusic/Local');
+    });
 
     delete window.teaMusicBackend;
   });
@@ -997,7 +791,6 @@ describe('App shell', () => {
       chooseLocalAudioFiles: async () => [],    };
 
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: '本地音乐' }));
 
     await waitFor(() => {
       expect(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /扫描兜底/ })).toBeInTheDocument();
@@ -1014,7 +807,11 @@ describe('App shell', () => {
       chooseLocalAudioFiles: async () => [],    };
 
     render(<App />);
-    fireEvent.change(screen.getByPlaceholderText('搜索歌曲、歌手、歌单'), { target: { value: '深夜收藏' } });
+    await waitFor(() => {
+      expect(within(screen.getByLabelText('歌曲列表')).getByText('重启还在')).toBeInTheDocument();
+    });
+    openSearch();
+    fireEvent.change(screen.getByPlaceholderText('搜索歌曲、歌手'), { target: { value: '深夜收藏' } });
 
     await waitFor(() => {
       expect(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /重启还在/ })).toHaveTextContent('Taomic · 深夜收藏');
@@ -1049,11 +846,12 @@ describe('App shell', () => {
       chooseLocalAudioFiles: async () => [],    };
 
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: '我喜欢' }));
 
     await waitFor(() => {
       expect(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /重启还在/ })).toBeInTheDocument();
     });
+    fireEvent.click(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /重启还在/ }));
+    expect(screen.getByLabelText('取消喜欢当前歌曲')).toBeInTheDocument();
 
     delete window.teaMusicBackend;
   });
