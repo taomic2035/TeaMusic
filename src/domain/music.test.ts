@@ -15,6 +15,7 @@ import {
   markTrackPlayed,
   markTrackSkipped,
   parseLrc,
+  toFileAudioUrl,
 } from './music';
 
 describe('music domain rules', () => {
@@ -74,6 +75,14 @@ describe('music domain rules', () => {
 
     expect(sameLocalTrack.id).toBe(localTrack.id);
     expect(sameResolvedTrack.id).toBe(resolvedTrack.id);
+  });
+
+  it('builds three-slash file urls for windows and posix paths', () => {
+    expect(toFileAudioUrl('D:/Music/TeaMusic/Resolved/周杰伦/晴天-周杰伦.mp3')).toBe(
+      'file:///D:/Music/TeaMusic/Resolved/%E5%91%A8%E6%9D%B0%E4%BC%A6/%E6%99%B4%E5%A4%A9-%E5%91%A8%E6%9D%B0%E4%BC%A6.mp3',
+    );
+    expect(toFileAudioUrl('D:\\Music\\x-y.mp3')).toBe('file:///D:/Music/x-y.mp3');
+    expect(toFileAudioUrl('/Users/taomic/Music/x-y.mp3')).toBe('file:///Users/taomic/Music/x-y.mp3');
   });
 
   it('encodes native file urls without changing stable path ids', () => {

@@ -6,7 +6,18 @@ import { describe, expect, it } from 'vitest';
 
 const require = createRequire(import.meta.url);
 
+const fileUrl = (p: string) => {
+  const f = p.replace(/\\/g, '/');
+  return encodeURI(f.startsWith('/') ? `file://${f}` : `file:///${f}`);
+};
+
 describe('Electron music library helpers', () => {
+  it('builds three-slash file urls cross-platform', () => {
+    const { toFileUrl } = require('./music-library.cjs') as { toFileUrl(p: string): string };
+    expect(toFileUrl('D:\\Music\\x.jpg')).toBe('file:///D:/Music/x.jpg');
+    expect(toFileUrl('/Users/x/a.jpg')).toBe('file:///Users/x/a.jpg');
+  });
+
   it('collects audio files from selected folders and files', () => {
     const { collectAudioFilesFromSelection } = require('./music-library.cjs') as {
       collectAudioFilesFromSelection(paths: string[]): string[];
@@ -63,6 +74,6 @@ describe('Electron music library helpers', () => {
     writeFileSync(track, 'audio');
     writeFileSync(cover, 'image');
 
-    expect(readSidecarArtwork(track)).toBe(encodeURI(`file://${cover}`));
+    expect(readSidecarArtwork(track)).toBe(fileUrl(cover));
   });
 });

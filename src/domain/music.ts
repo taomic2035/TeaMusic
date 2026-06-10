@@ -160,8 +160,10 @@ function parseTrackName(name: string, fallbackArtist: string): { title: string; 
   };
 }
 
-function toFileAudioUrl(filePath: string): string {
-  return encodeURI(`file://${filePath.replace(/\\/g, '/')}`);
+export function toFileAudioUrl(filePath: string): string {
+  const forward = filePath.replace(/\\/g, '/');
+  const url = forward.startsWith('/') ? `file://${forward}` : `file:///${forward}`;
+  return encodeURI(url);
 }
 
 export function filterTracks(tracks: Track[], query: string): Track[] {

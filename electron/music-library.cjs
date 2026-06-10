@@ -41,7 +41,9 @@ function readSidecarLyrics(filePath) {
 }
 
 function toFileUrl(filePath) {
-  return encodeURI(`file://${filePath.replace(/\\/g, '/')}`);
+  const forward = filePath.replace(/\\/g, '/');
+  const url = forward.startsWith('/') ? `file://${forward}` : `file:///${forward}`;
+  return encodeURI(url);
 }
 
 function readSidecarArtwork(filePath) {
@@ -64,4 +66,5 @@ module.exports = {
   listAudioFiles,
   readSidecarArtwork,
   readSidecarLyrics,
+  toFileUrl,
 };
