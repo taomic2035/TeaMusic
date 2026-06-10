@@ -80,9 +80,7 @@ describe('App shell', () => {
     window.teaMusicBackend = {
       scanResolvedLibrary: async () => [],
       scanLocalLibrary: async () => [],
-      chooseLocalAudioFiles,
-      resolveMissingTrack: async () => ({ files: [], outputDir: '', stdout: '' }),
-    };
+      chooseLocalAudioFiles,    };
 
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: '添加本地音乐' }));
@@ -104,9 +102,7 @@ describe('App shell', () => {
     window.teaMusicBackend = {
       scanResolvedLibrary: async () => [],
       scanLocalLibrary: async () => [],
-      chooseLocalAudioFiles,
-      resolveMissingTrack: async () => ({ files: [], outputDir: '', stdout: '' }),
-    };
+      chooseLocalAudioFiles,    };
 
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: '添加本地音乐' }));
@@ -131,9 +127,7 @@ describe('App shell', () => {
     window.teaMusicBackend = {
       scanResolvedLibrary: async () => [],
       scanLocalLibrary: async () => [],
-      chooseLocalAudioFiles,
-      resolveMissingTrack: async () => ({ files: [], outputDir: '', stdout: '' }),
-    };
+      chooseLocalAudioFiles,    };
 
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: '添加本地音乐' }));
@@ -154,9 +148,7 @@ describe('App shell', () => {
       scanResolvedLibrary: async () => [],
       scanLocalLibrary: async () => [filePath],
       chooseLocalAudioFiles: async () => [],
-      removeLocalAudioFile,
-      resolveMissingTrack: async () => ({ files: [], outputDir: '', stdout: '' }),
-    };
+      removeLocalAudioFile,    };
 
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: '本地音乐' }));
@@ -187,9 +179,7 @@ describe('App shell', () => {
       scanResolvedLibrary: async () => [],
       scanLocalLibrary: async () => [filePath],
       chooseLocalAudioFiles: async () => [],
-      revealLocalAudioFile,
-      resolveMissingTrack: async () => ({ files: [], outputDir: '', stdout: '' }),
-    };
+      revealLocalAudioFile,    };
 
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: '本地音乐' }));
@@ -282,39 +272,66 @@ describe('App shell', () => {
     expect(screen.queryByLabelText('播放队列面板')).not.toBeInTheDocument();
   });
 
-  it('downloads the current online track on demand and marks it downloaded', async () => {
-    const resolveMissingTrack = vi.fn(async () => ({
-      files: ['/Users/taomic/Music/TeaMusic/Resolved/推荐曲库/晴夜漫游-推荐曲库.mp3'],
-      outputDir: '/Users/taomic/Music/TeaMusic/Resolved',
-      stdout: '',
+  it('opens the hidden finder and downloads an online track into the library', async () => {
+    const downloadOnline = vi.fn(async () => ({
+      filePath: 'D:/Music/TeaMusic/Resolved/周杰伦/晴天-周杰伦.mp3',
+      title: '晴天',
+      artist: '周杰伦',
     }));
     window.teaMusicBackend = {
       scanResolvedLibrary: async () => [],
       scanLocalLibrary: async () => [],
       chooseLocalAudioFiles: async () => [],
-      resolveMissingTrack,
+      searchOnline: async () => [{ id: '402856', title: '晴天', artist: '周杰伦' }],
+      downloadOnline,
     };
 
     render(<App />);
-    fireEvent.click(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /晴夜漫游/ }));
-
-    fireEvent.click(screen.getByLabelText('下载当前歌曲'));
+    fireEvent.click(screen.getByLabelText('在线找歌'));
+    const finderInput = screen.getByPlaceholderText('歌名或歌手，回车搜索');
+    fireEvent.change(finderInput, { target: { value: '晴天' } });
+    fireEvent.keyDown(finderInput, { key: 'Enter' });
 
     await waitFor(() => {
-      expect(resolveMissingTrack).toHaveBeenCalledWith('晴夜漫游 推荐曲库');
+      expect(screen.getByText('晴天')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByLabelText('下载'));
+
+    await waitFor(() => {
+      expect(downloadOnline).toHaveBeenCalledWith('402856');
     });
     await waitFor(() => {
-      expect(screen.getByLabelText('已下载')).toBeInTheDocument();
+      expect(screen.getAllByText('晴天').length).toBeGreaterThan(0);
     });
 
     delete window.teaMusicBackend;
   });
 
-  it('hides the download action for local tracks that are already on disk', () => {
-    render(<App />);
+  it('never downloads from the main library search box', async () => {
+    const downloadOnline = vi.fn();
+    const searchOnline = vi.fn(async () => []);
+    window.teaMusicBackend = {
+      scanResolvedLibrary: async () => [],
+      scanLocalLibrary: async () => [],
+      chooseLocalAudioFiles: async () => [],
+      searchOnline,
+      downloadOnline,
+    };
 
-    expect(screen.queryByLabelText('下载当前歌曲')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('已下载')).toBeInTheDocument();
+    render(<App />);
+    const search = screen.getByPlaceholderText('搜索歌曲、歌手、歌单');
+    fireEvent.change(search, { target: { value: '不存在的歌' } });
+    fireEvent.keyDown(search, { key: 'Enter' });
+
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, 300);
+    });
+
+    expect(downloadOnline).not.toHaveBeenCalled();
+    expect(searchOnline).not.toHaveBeenCalled();
+
+    delete window.teaMusicBackend;
   });
 
   it('plays a library track immediately on double click and marks it as playing', () => {
@@ -383,9 +400,7 @@ describe('App shell', () => {
         '/Users/taomic/Music/TeaMusic/Local/连续一-Taomic.wav',
         '/Users/taomic/Music/TeaMusic/Local/连续二-Taomic.wav',
       ],
-      chooseLocalAudioFiles: async () => [],
-      resolveMissingTrack: async () => ({ files: [], outputDir: '', stdout: '' }),
-    };
+      chooseLocalAudioFiles: async () => [],    };
 
     render(<App />);
     await waitFor(() => {
@@ -561,262 +576,6 @@ describe('App shell', () => {
     expect(search.value).toBe('');
   });
 
-  it('imports a resolved backend result back into the library quietly', async () => {
-    window.teaMusicBackend = {
-      scanResolvedLibrary: async () => [],
-      scanLocalLibrary: async () => [],
-      chooseLocalAudioFiles: async () => [],
-      resolveMissingTrack: async () => ({
-        files: ['/Users/taomic/Music/TeaMusic/Resolved/歌手/真实歌名-歌手.mp3'],
-        outputDir: '/Users/taomic/Music/TeaMusic/Resolved',
-        stdout: '',
-      }),
-    };
-
-    render(<App />);
-    fireEvent.change(screen.getByPlaceholderText('搜索歌曲、歌手、歌单'), { target: { value: '冷门别名' } });
-    fireEvent.click(screen.getByText('尝试曲库补全'));
-
-    await waitFor(() => {
-      expect(screen.getByText('曲库补全：已补全 1 首')).toBeInTheDocument();
-    });
-    expect(screen.getAllByText('真实歌名').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('已补全').length).toBeGreaterThan(0);
-
-    delete window.teaMusicBackend;
-  });
-
-  it('does not duplicate resolved backend paths already in the library', async () => {
-    const filePath = '/Users/taomic/Music/TeaMusic/Resolved/歌手/真实歌名-歌手.mp3';
-    window.teaMusicBackend = {
-      scanResolvedLibrary: async () => [filePath],
-      scanLocalLibrary: async () => [],
-      chooseLocalAudioFiles: async () => [],
-      resolveMissingTrack: async () => ({
-        files: [filePath],
-        outputDir: '/Users/taomic/Music/TeaMusic/Resolved',
-        stdout: '',
-      }),
-    };
-
-    render(<App />);
-    await waitFor(() => {
-      expect(within(screen.getByLabelText('歌曲列表')).getByText('真实歌名')).toBeInTheDocument();
-    });
-
-    fireEvent.change(screen.getByPlaceholderText('搜索歌曲、歌手、歌单'), { target: { value: '别名搜索' } });
-    fireEvent.click(screen.getByText('尝试曲库补全'));
-
-    await waitFor(() => {
-      expect(screen.getByText('曲库补全：已补全 1 首')).toBeInTheDocument();
-    });
-    expect(within(screen.getByLabelText('歌曲列表')).getAllByText('真实歌名')).toHaveLength(1);
-
-    delete window.teaMusicBackend;
-  });
-
-  it('queues background completion from search enter when the library has no match', async () => {
-    window.teaMusicBackend = {
-      scanResolvedLibrary: async () => [],
-      scanLocalLibrary: async () => [],
-      chooseLocalAudioFiles: async () => [],
-      resolveMissingTrack: async () => ({
-        files: ['/Users/taomic/Music/TeaMusic/Resolved/歌手/回车补全-歌手.mp3'],
-        outputDir: '/Users/taomic/Music/TeaMusic/Resolved',
-        stdout: '',
-      }),
-    };
-
-    render(<App />);
-    fireEvent.change(screen.getByPlaceholderText('搜索歌曲、歌手、歌单'), { target: { value: '回车补全' } });
-    fireEvent.keyDown(screen.getByPlaceholderText('搜索歌曲、歌手、歌单'), { key: 'Enter' });
-
-    await waitFor(() => {
-      expect(screen.getByText('曲库补全：已补全 1 首')).toBeInTheDocument();
-    });
-    expect(screen.getAllByText('回车补全').length).toBeGreaterThan(0);
-
-    delete window.teaMusicBackend;
-  });
-
-  it('does not queue duplicate background completion jobs for the same query', async () => {
-    const resolveMissingTrack = vi.fn(async () => ({
-      files: [],
-      outputDir: '/Users/taomic/Music/TeaMusic/Resolved',
-      stdout: '',
-    }));
-    window.teaMusicBackend = {
-      scanResolvedLibrary: async () => [],
-      scanLocalLibrary: async () => [],
-      chooseLocalAudioFiles: async () => [],
-      resolveMissingTrack,
-    };
-
-    render(<App />);
-    const search = screen.getByPlaceholderText('搜索歌曲、歌手、歌单');
-
-    fireEvent.change(search, { target: { value: '重复补全' } });
-    fireEvent.keyDown(search, { key: 'Enter' });
-
-    await waitFor(() => {
-      expect(resolveMissingTrack).toHaveBeenCalledTimes(1);
-    });
-
-    fireEvent.keyDown(search, { key: 'Enter' });
-    await new Promise((resolve) => {
-      window.setTimeout(resolve, 300);
-    });
-
-    expect(resolveMissingTrack).toHaveBeenCalledTimes(1);
-
-    delete window.teaMusicBackend;
-  });
-
-  it('quietly auto-queues background completion when a search has no match', async () => {
-    const resolveMissingTrack = vi.fn(async () => ({
-      files: ['/Users/taomic/Music/TeaMusic/Resolved/歌手/自动补全-歌手.mp3'],
-      outputDir: '/Users/taomic/Music/TeaMusic/Resolved',
-      stdout: '',
-    }));
-    window.teaMusicBackend = {
-      scanResolvedLibrary: async () => [],
-      scanLocalLibrary: async () => [],
-      chooseLocalAudioFiles: async () => [],
-      resolveMissingTrack,
-    };
-
-    render(<App />);
-    fireEvent.change(screen.getByPlaceholderText('搜索歌曲、歌手、歌单'), { target: { value: '自动补全' } });
-
-    await waitFor(() => {
-      expect(resolveMissingTrack).toHaveBeenCalledWith('自动补全');
-    });
-    await waitFor(() => {
-      expect(screen.getByText('曲库补全：已补全 1 首')).toBeInTheDocument();
-    });
-    expect(screen.getAllByText('自动补全').length).toBeGreaterThan(0);
-
-    delete window.teaMusicBackend;
-  });
-
-  it('shows a subtle resolving row for missing searched tracks', async () => {
-    let finishResolve: ((value: { files: string[]; outputDir: string; stdout: string }) => void) | undefined;
-    const resolveMissingTrack = vi.fn(
-      () =>
-        new Promise<{ files: string[]; outputDir: string; stdout: string }>((resolve) => {
-          finishResolve = resolve;
-        }),
-    );
-    window.teaMusicBackend = {
-      scanResolvedLibrary: async () => [],
-      scanLocalLibrary: async () => [],
-      chooseLocalAudioFiles: async () => [],
-      resolveMissingTrack,
-    };
-
-    render(<App />);
-    const search = screen.getByPlaceholderText('搜索歌曲、歌手、歌单');
-    fireEvent.change(search, { target: { value: '等待补全的歌' } });
-    fireEvent.keyDown(search, { key: 'Enter' });
-
-    await waitFor(() => {
-      const list = within(screen.getByLabelText('歌曲列表'));
-      expect(list.getByText('等待补全的歌')).toBeInTheDocument();
-      expect(list.getByText('补全中')).toBeInTheDocument();
-    });
-    expect(screen.queryByText('下载中心')).not.toBeInTheDocument();
-
-    finishResolve?.({ files: [], outputDir: '', stdout: '' });
-    delete window.teaMusicBackend;
-  });
-
-  it('does not auto-queue background completion for one-character searches', async () => {
-    const resolveMissingTrack = vi.fn(async () => ({
-      files: [],
-      outputDir: '/Users/taomic/Music/TeaMusic/Resolved',
-      stdout: '',
-    }));
-    window.teaMusicBackend = {
-      scanResolvedLibrary: async () => [],
-      scanLocalLibrary: async () => [],
-      chooseLocalAudioFiles: async () => [],
-      resolveMissingTrack,
-    };
-
-    render(<App />);
-    const search = screen.getByPlaceholderText('搜索歌曲、歌手、歌单');
-    fireEvent.change(search, { target: { value: '周' } });
-
-    await new Promise((resolve) => {
-      window.setTimeout(resolve, 300);
-    });
-    expect(resolveMissingTrack).not.toHaveBeenCalled();
-
-    fireEvent.keyDown(search, { key: 'Enter' });
-    await waitFor(() => {
-      expect(resolveMissingTrack).toHaveBeenCalledWith('周');
-    });
-
-    delete window.teaMusicBackend;
-  });
-
-  it('keeps backend completion failures visible but quiet', async () => {
-    window.teaMusicBackend = {
-      scanResolvedLibrary: async () => [],
-      scanLocalLibrary: async () => [],
-      chooseLocalAudioFiles: async () => [],
-      resolveMissingTrack: async () => {
-        throw new Error('musicol failed');
-      },
-    };
-
-    render(<App />);
-    fireEvent.change(screen.getByPlaceholderText('搜索歌曲、歌手、歌单'), { target: { value: '找不到的歌' } });
-    fireEvent.click(screen.getByText('尝试曲库补全'));
-
-    await waitFor(() => {
-      expect(screen.getByText('曲库补全：1 首失败')).toBeInTheDocument();
-    });
-
-    delete window.teaMusicBackend;
-  });
-
-  it('allows retrying the same backend completion query after a failure', async () => {
-    const resolveMissingTrack = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('musicol failed'))
-      .mockResolvedValueOnce({
-        files: ['/Users/taomic/Music/TeaMusic/Resolved/歌手/重试成功-歌手.mp3'],
-        outputDir: '/Users/taomic/Music/TeaMusic/Resolved',
-        stdout: '',
-      });
-    window.teaMusicBackend = {
-      scanResolvedLibrary: async () => [],
-      scanLocalLibrary: async () => [],
-      chooseLocalAudioFiles: async () => [],
-      resolveMissingTrack,
-    };
-
-    render(<App />);
-    fireEvent.change(screen.getByPlaceholderText('搜索歌曲、歌手、歌单'), { target: { value: '重试补全' } });
-    fireEvent.click(screen.getByText('尝试曲库补全'));
-
-    await waitFor(() => {
-      expect(screen.getByText('曲库补全：1 首失败')).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByText('尝试曲库补全'));
-
-    await waitFor(() => {
-      expect(resolveMissingTrack).toHaveBeenCalledTimes(2);
-    });
-    await waitFor(() => {
-      expect(screen.getAllByText('重试成功').length).toBeGreaterThan(0);
-    });
-
-    delete window.teaMusicBackend;
-  });
-
   it('switches pure music library views from the sidebar', () => {
     render(<App />);
 
@@ -845,12 +604,13 @@ describe('App shell', () => {
   });
 
   it('searches playlist names from the unified search box', async () => {
-    const resolveMissingTrack = vi.fn(async () => ({ files: [], outputDir: '', stdout: '' }));
+    const searchOnline = vi.fn(async () => []);
     window.teaMusicBackend = {
       scanResolvedLibrary: async () => [],
       scanLocalLibrary: async () => [],
       chooseLocalAudioFiles: async () => [],
-      resolveMissingTrack,
+      searchOnline,
+      downloadOnline: async () => ({ error: 'noop' }),
     };
 
     render(<App />);
@@ -861,7 +621,7 @@ describe('App shell', () => {
     await new Promise((resolve) => {
       window.setTimeout(resolve, 300);
     });
-    expect(resolveMissingTrack).not.toHaveBeenCalled();
+    expect(searchOnline).not.toHaveBeenCalled();
 
     delete window.teaMusicBackend;
   });
@@ -1105,9 +865,7 @@ describe('App shell', () => {
     window.teaMusicBackend = {
       scanResolvedLibrary: async () => [],
       scanLocalLibrary: async () => [filePath],
-      chooseLocalAudioFiles: async () => [],
-      resolveMissingTrack: async () => ({ files: [], outputDir: '', stdout: '' }),
-    };
+      chooseLocalAudioFiles: async () => [],    };
 
     const firstSession = render(<App />);
     await waitFor(() => {
@@ -1190,9 +948,7 @@ describe('App shell', () => {
     window.teaMusicBackend = {
       scanResolvedLibrary: async () => [],
       scanLocalLibrary: async () => ['/Users/taomic/Music/TeaMusic/Local/坏文件-Taomic.wav'],
-      chooseLocalAudioFiles: async () => [],
-      resolveMissingTrack: async () => ({ files: [], outputDir: '', stdout: '' }),
-    };
+      chooseLocalAudioFiles: async () => [],    };
 
     render(<App />);
     await waitFor(() => {
@@ -1244,9 +1000,7 @@ describe('App shell', () => {
   });
 
   it('restores previously resolved tracks from the backend library on launch', async () => {
-    window.teaMusicBackend = {
-      resolveMissingTrack: async () => ({ files: [], outputDir: '', stdout: '' }),
-      chooseLocalAudioFiles: async () => [],
+    window.teaMusicBackend = {      chooseLocalAudioFiles: async () => [],
       scanResolvedLibrary: async () => ['/Users/taomic/Music/TeaMusic/Resolved/歌手/启动恢复-歌手.mp3'],
       scanLocalLibrary: async () => [],
     };
@@ -1263,9 +1017,7 @@ describe('App shell', () => {
     window.teaMusicBackend = {
       scanResolvedLibrary: async () => [],
       scanLocalLibrary: async () => ['/Users/taomic/Music/TeaMusic/Local/重启还在-Taomic.wav'],
-      chooseLocalAudioFiles: async () => [],
-      resolveMissingTrack: async () => ({ files: [], outputDir: '', stdout: '' }),
-    };
+      chooseLocalAudioFiles: async () => [],    };
 
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: '本地音乐' }));
@@ -1286,9 +1038,7 @@ describe('App shell', () => {
       scanResolvedLibrary: async () => [],
       scanLocalLibrary: async () => [filePath],
       chooseLocalAudioFiles: async () => [],
-      readLocalLyrics,
-      resolveMissingTrack: async () => ({ files: [], outputDir: '', stdout: '' }),
-    };
+      readLocalLyrics,    };
 
     render(<App />);
     await waitFor(() => {
@@ -1312,9 +1062,7 @@ describe('App shell', () => {
       scanResolvedLibrary: async () => [],
       scanLocalLibrary: async () => [filePath],
       chooseLocalAudioFiles: async () => [],
-      readLocalArtwork,
-      resolveMissingTrack: async () => ({ files: [], outputDir: '', stdout: '' }),
-    };
+      readLocalArtwork,    };
 
     render(<App />);
     await waitFor(() => {
@@ -1337,9 +1085,7 @@ describe('App shell', () => {
         throw new Error('resolved scan failed');
       },
       scanLocalLibrary: async () => ['/Users/taomic/Music/TeaMusic/Local/扫描兜底-Taomic.wav'],
-      chooseLocalAudioFiles: async () => [],
-      resolveMissingTrack: async () => ({ files: [], outputDir: '', stdout: '' }),
-    };
+      chooseLocalAudioFiles: async () => [],    };
 
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: '本地音乐' }));
@@ -1356,9 +1102,7 @@ describe('App shell', () => {
     window.teaMusicBackend = {
       scanResolvedLibrary: async () => [],
       scanLocalLibrary: async () => ['/Users/taomic/Music/TeaMusic/Local/深夜收藏/重启还在-Taomic.wav'],
-      chooseLocalAudioFiles: async () => [],
-      resolveMissingTrack: async () => ({ files: [], outputDir: '', stdout: '' }),
-    };
+      chooseLocalAudioFiles: async () => [],    };
 
     render(<App />);
     fireEvent.change(screen.getByPlaceholderText('搜索歌曲、歌手、歌单'), { target: { value: '深夜收藏' } });
@@ -1376,9 +1120,7 @@ describe('App shell', () => {
     window.teaMusicBackend = {
       scanResolvedLibrary: async () => [],
       scanLocalLibrary: async () => [filePath],
-      chooseLocalAudioFiles: async () => [],
-      resolveMissingTrack: async () => ({ files: [], outputDir: '', stdout: '' }),
-    };
+      chooseLocalAudioFiles: async () => [],    };
 
     render(<App />);
 
@@ -1395,9 +1137,7 @@ describe('App shell', () => {
     window.teaMusicBackend = {
       scanResolvedLibrary: async () => [],
       scanLocalLibrary: async () => [filePath],
-      chooseLocalAudioFiles: async () => [],
-      resolveMissingTrack: async () => ({ files: [], outputDir: '', stdout: '' }),
-    };
+      chooseLocalAudioFiles: async () => [],    };
 
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: '我喜欢' }));
