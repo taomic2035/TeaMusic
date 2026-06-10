@@ -33,7 +33,7 @@ button {
   position: relative;
   display: grid;
   grid-template-columns: 204px minmax(0, 1fr);
-  grid-template-rows: 48px minmax(0, 1fr) 78px;
+  grid-template-rows: 48px minmax(0, 1fr) auto;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
@@ -415,11 +415,23 @@ h1 {
   margin-top: 18px;
 }
 
+.content-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.content-head h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 680;
+}
+
 .library-strip {
-  display: grid;
-  grid-template-columns: minmax(220px, 0.8fr) minmax(340px, 1.2fr);
-  gap: 20px;
-  padding: 18px;
+  display: block;
+  padding: 12px;
   border-radius: 20px;
 }
 
@@ -445,53 +457,43 @@ h1 {
   line-height: 1.5;
 }
 
-.track-row,
-.resolver-row {
+.track-row {
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) auto;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
-  padding: 8px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.06);
+  gap: 12px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
   color: inherit;
   text-align: left;
-  backdrop-filter: blur(18px) saturate(130%);
-}
-
-.resolver-row {
-  cursor: default;
+  cursor: pointer;
 }
 
 .track-row:hover,
 .track-row.active {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.1);
 }
 
-.track-row.active {
-  outline: 1px solid rgba(255, 255, 255, 0.12);
-}
-
-.track-cover {
-  position: relative;
-  display: block;
-  width: 40px;
-  height: 40px;
+.track-bullet {
+  width: 5px;
+  height: 5px;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.28);
 }
 
 .playing-bars {
-  position: absolute;
-  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 2px;
-  border-radius: 10px;
-  background: rgba(8, 14, 10, 0.55);
 }
 
 .playing-bars i {
-  width: 2.5px;
+  width: 2px;
   height: 8px;
   border-radius: 2px;
   background: rgba(123, 255, 180, 0.95);
@@ -799,16 +801,89 @@ button.mini-download:hover {
 }
 
 .now-playing {
+  position: relative;
   min-width: 0;
   gap: 10px;
 }
 
-.now-playing strong,
-.now-playing span {
+.now-playing-meta {
+  min-width: 0;
+  margin-right: auto;
+}
+
+.now-playing-meta h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 640;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.now-playing-meta span {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.mini-like,
+.track-menu-btn {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.66);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.mini-like:hover,
+.track-menu-btn:hover,
+.track-menu-btn.active {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.mini-like.active {
+  color: #ff6b8b;
+}
+
+.track-menu-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 49;
+}
+
+.track-menu {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  min-width: 160px;
+  padding: 6px;
+  border-radius: 12px;
+}
+
+.track-menu button {
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+  text-align: left;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.track-menu button:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .album-art {
@@ -890,35 +965,22 @@ button.mini-download:hover {
   display: none;
 }
 
+/* 窄屏：隐藏次要控件而非堆叠换行，播放条始终单行，避免 resize 重叠 */
 @media (max-width: 980px) {
-  .feature-grid {
-    grid-template-columns: repeat(2, minmax(160px, 1fr));
-  }
-
-  .library-strip,
-  .workbench-grid,
   .player-bar {
-    grid-template-columns: 1fr;
+    gap: 10px;
   }
 
-  .player-bar {
-    gap: 8px;
-  }
-
-  .hero-row,
-  .hero-actions {
-    align-items: flex-start;
-  }
-
-  .hero-row {
-    flex-direction: column;
+  .volume-slider,
+  .progress-area > span {
+    display: none;
   }
 }
 
 @media (max-width: 760px) {
   .app-shell {
     grid-template-columns: 72px minmax(0, 1fr);
-    grid-template-rows: 48px minmax(0, 1fr) 134px;
+    grid-template-rows: 48px minmax(0, 1fr) auto;
   }
 
   .sidebar {
@@ -957,14 +1019,6 @@ button.mini-download:hover {
     padding: 14px;
   }
 
-  h1 {
-    font-size: 23px;
-  }
-
-  .hero-actions {
-    flex-wrap: wrap;
-  }
-
   .quiet-action {
     width: 38px;
     height: 38px;
@@ -972,68 +1026,21 @@ button.mini-download:hover {
     padding: 0;
   }
 
-  .feature-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .music-card {
-    min-height: 116px;
-  }
-
-  .music-card h2 {
-    margin-bottom: 34px;
-  }
-
   .library-strip {
     gap: 14px;
     padding: 14px;
-  }
-
-  .track-row {
-    grid-template-columns: 36px minmax(0, 1fr);
-  }
-
-  .track-row em {
-    justify-self: start;
-    grid-column: 2;
-  }
-
-  .focus-heading {
-    align-items: center;
-  }
-
-  .focus-cover {
-    width: 96px;
-    height: 96px;
-  }
-
-  .player-focus {
-    min-height: 244px;
   }
 
   .player-bar {
     padding: 10px 12px;
   }
 
-  .now-playing {
-    justify-content: center;
-  }
-
   .transport {
     gap: 10px;
   }
 
-  .progress-area {
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-
   .progress-slider {
-    width: min(280px, 52vw);
-  }
-
-  .volume-slider {
-    width: 70px;
+    width: min(200px, 32vw);
   }
 }
 
@@ -1479,7 +1486,7 @@ button.mini-download:hover {
 
 .queue-drawer-row {
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   padding: 8px;
