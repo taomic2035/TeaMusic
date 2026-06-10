@@ -907,7 +907,7 @@ button.mini-download:hover {
   gap: 14px;
 }
 
-.transport button {
+.transport > button {
   display: grid;
   width: 34px;
   height: 34px;
@@ -918,7 +918,7 @@ button.mini-download:hover {
   transition: background 0.15s ease, color 0.15s ease;
 }
 
-.transport button:hover {
+.transport > button:hover {
   color: #fff;
 }
 
