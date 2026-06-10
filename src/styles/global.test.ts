@@ -9,7 +9,8 @@ describe('global responsive styles', () => {
     expect(css).not.toMatch(/body\s*{[^}]*min-width:\s*860px/s);
   });
 
-  it('defines a narrow-window layout for compact Mac windows', () => {
-    expect(css).toMatch(/@media\s*\(max-width:\s*760px\)/);
+  it('lays out the shell as a single vertical column for the portrait player', () => {
+    expect(css).toMatch(/\.app-shell\s*{[^}]*flex-direction:\s*column/s);
+    expect(css).not.toMatch(/\.app-shell\s*{[^}]*grid-template-columns/s);
   });
 });
