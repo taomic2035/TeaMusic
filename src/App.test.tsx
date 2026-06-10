@@ -199,12 +199,12 @@ describe('App shell', () => {
   });
 
 
-  it('renders the focused listening area with lyrics', () => {
+  it('drives the whole-window backdrop from the current track cover', () => {
     render(<App />);
 
-    expect(screen.getByLabelText('当前播放')).toBeInTheDocument();
-    expect(screen.getByLabelText('歌词')).toBeInTheDocument();
-    expect(screen.getByText('让玻璃里的光轻轻晃')).toBeInTheDocument();
+    const shell = document.querySelector('.app-shell') as HTMLElement;
+    expect(document.querySelector('.app-backdrop')).toBeInTheDocument();
+    expect(shell.style.getPropertyValue('--app-cover')).toContain('url(');
   });
 
   it('opens and closes the immersive now playing page', () => {

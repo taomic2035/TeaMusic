@@ -37,11 +37,28 @@ button {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background:
-    radial-gradient(circle at 17% 4%, rgba(83, 255, 160, 0.33), transparent 34%),
-    radial-gradient(circle at 88% 6%, rgba(116, 119, 255, 0.36), transparent 36%),
-    radial-gradient(circle at 73% 88%, rgba(255, 207, 91, 0.13), transparent 33%),
-    linear-gradient(145deg, #101511, #151625 56%, #101114);
+  background: #0d0e12;
+}
+
+.app-backdrop {
+  position: absolute;
+  z-index: 0;
+  inset: -8%;
+  pointer-events: none;
+  background-image: var(--app-cover, none);
+  background-position: center;
+  background-size: cover;
+  filter: blur(90px) saturate(180%) brightness(0.5);
+  transform: scale(1.2);
+  opacity: 0.85;
+  transition: opacity 0.6s ease;
+}
+
+.app-backdrop::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: radial-gradient(circle at 50% 0%, rgba(10, 12, 16, 0.35), rgba(8, 9, 12, 0.82) 80%);
 }
 
 .app-shell::before {

@@ -1304,6 +1304,7 @@ export function App() {
   return (
     <div
       className={isDragActive ? 'app-shell dragging-local' : 'app-shell'}
+      style={currentTrack.coverUrl ? ({ '--app-cover': `url("${currentTrack.coverUrl}")` } as CSSProperties) : undefined}
       onDragLeave={() => setIsDragActive(false)}
       onDragOver={(event) => {
         event.preventDefault();
@@ -1311,6 +1312,7 @@ export function App() {
       }}
       onDrop={handleLocalDrop}
     >
+      <div aria-hidden="true" className="app-backdrop" />
       {isDragActive ? <div className="drop-hint">松开导入到本地音乐</div> : null}
       <aside className="sidebar glass-panel">
         <div aria-hidden="true" className="window-controls">
