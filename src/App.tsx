@@ -1,6 +1,5 @@
 import {
   Check,
-  ChevronDown,
   CloudDownload,
   Download,
   Heart,
@@ -9,6 +8,7 @@ import {
   ListMinus,
   ListPlus,
   ListMusic,
+  MoreHorizontal,
   Music2,
   Pause,
   Play,
@@ -28,9 +28,7 @@ import {
 } from 'lucide-react';
 import { ChangeEvent, CSSProperties, DragEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  RecommendationCard,
   Track,
-  buildRecommendationCards,
   buildSimilarTrackIds,
   createLocalTrackFromFile,
   createLocalTrackFromPath,
@@ -41,7 +39,6 @@ import {
   getTrackBadge,
   markTrackPlayed,
   markTrackSkipped,
-  parseLrc,
 } from './domain/music';
 
 type LibraryView = 'discover' | 'library' | 'local' | 'favorites';
@@ -481,8 +478,8 @@ export function App() {
     () => typeof window === 'undefined' || !window.teaMusicBackend,
   );
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isNowPlayingOpen, setIsNowPlayingOpen] = useState(false);
   const [isQueueOpen, setIsQueueOpen] = useState(false);
+  const [isTrackMenuOpen, setIsTrackMenuOpen] = useState(false);
   const [downloadingIds, setDownloadingIds] = useState<Set<string>>(() => new Set());
   const [isDragActive, setIsDragActive] = useState(false);
   const [playbackMode, setPlaybackMode] = useState<PlaybackMode>(restorePlaybackMode);
@@ -494,7 +491,6 @@ export function App() {
   const previousTrackIdRef = useRef(currentTrackId);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const localFileInputRef = useRef<HTMLInputElement>(null);
-  const nowPlayingLyricsRef = useRef<HTMLDivElement>(null);
   const preMuteVolumeRef = useRef(70);
 
   const recentTracks = useMemo(
@@ -557,7 +553,6 @@ export function App() {
       .map((offset) => playbackQueue[(currentIndex + offset) % playbackQueue.length])
       .filter((track, index, queue) => track.id !== currentTrackId && queue.findIndex((queuedTrack) => queuedTrack.id === track.id) === index);
   }, [currentTrackId, playbackQueue]);
-  const recommendationCards = useMemo(() => buildRecommendationCards(tracks), [tracks]);
   const currentTrack = tracks.find((track) => track.id === currentTrackId) ?? tracks[0];
   const isActiveUserPlaylist = isPlaylistView(activeView) && isUserPlaylistView(activeView);
   const activeUserPlaylistHasCurrentTrack = isActiveUserPlaylist
@@ -569,11 +564,6 @@ export function App() {
     ? { title: playlistState[activeView]?.name ?? '播放列表', description: playlistState[activeView]?.description ?? '这个播放列表还没有歌曲' }
     : viewCopy[activeView];
   const activeKicker = isPlaylistView(activeView) ? playlistState[activeView]?.kicker ?? '播放列表' : viewKicker[activeView];
-  const currentLyrics = currentTrack.lyrics ?? [{ at: 0, text: '导入本地歌曲后，歌词会在这里保持沉浸显示。' }];
-  const currentLyricIndex = currentLyrics.reduce(
-    (activeIndex, line, index) => (line.at <= playbackTime.current ? index : activeIndex),
-    0,
-  );
   const emptyState = isPlaylistView(activeView)
     ? {
         message: activeView === 'playlist:similar' ? '还没有足够相似的歌曲' : '这个播放列表还没有歌曲',
@@ -717,33 +707,6 @@ export function App() {
   });
 
   useEffect(() => {
-    if (!currentTrack.filePath || currentTrack.lyrics?.length || !window.teaMusicBackend?.readLocalLyrics) {
-      return;
-    }
-
-    let isMounted = true;
-
-    async function loadLyrics() {
-      const rawLyrics = await window.teaMusicBackend?.readLocalLyrics?.(currentTrack.filePath ?? '');
-      const lyrics = rawLyrics ? parseLrc(rawLyrics) : [];
-
-      if (!isMounted || lyrics.length === 0) {
-        return;
-      }
-
-      setTracks((existingTracks) =>
-        existingTracks.map((track) => (track.id === currentTrack.id ? { ...track, lyrics } : track)),
-      );
-    }
-
-    void loadLyrics();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [currentTrack.filePath, currentTrack.id, currentTrack.lyrics?.length]);
-
-  useEffect(() => {
     if (!currentTrack.filePath || currentTrack.coverUrl || !window.teaMusicBackend?.readLocalArtwork) {
       return;
     }
@@ -787,20 +750,6 @@ export function App() {
   useEffect(() => {
     persistPlaylists(playlistState);
   }, [playlistState]);
-
-  useEffect(() => {
-    if (!isNowPlayingOpen) {
-      return;
-    }
-
-    const activeLine = nowPlayingLyricsRef.current?.querySelector<HTMLElement>('.current');
-
-    try {
-      activeLine?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    } catch {
-      // scrollIntoView is best-effort and unavailable in some non-DOM environments.
-    }
-  }, [currentLyricIndex, currentTrackId, isNowPlayingOpen]);
 
   function importLocalFiles(files: File[]) {
     const audioTracks = files
@@ -1084,10 +1033,10 @@ export function App() {
       }
 
       if (event.key === 'Escape') {
-        if (isNowPlayingOpen || isQueueOpen) {
+        if (isQueueOpen || isTrackMenuOpen) {
           event.preventDefault();
-          setIsNowPlayingOpen(false);
           setIsQueueOpen(false);
+          setIsTrackMenuOpen(false);
         }
         return;
       }
@@ -1279,25 +1228,6 @@ export function App() {
     });
   }
 
-  function openRecommendation(card: RecommendationCard) {
-    if (card.tone === 'radio') {
-      setActiveView('local');
-      return;
-    }
-
-    if (card.tone === 'similar') {
-      playMoreSimilar();
-      return;
-    }
-
-    if (card.tone === 'chart' && recentTracks.length > 0) {
-      setActiveView('playlist:recent');
-      return;
-    }
-
-    setActiveView('library');
-  }
-
   const ModeIcon = playbackMode === 'queue' ? Repeat : playbackMode === 'repeat-one' ? Repeat1 : Shuffle;
   const sleepTimerLabel = sleepTimerMinutes ? `${sleepTimerMinutes} 分钟` : '关闭';
 
@@ -1417,172 +1347,67 @@ export function App() {
       </header>
 
       <main className="content">
-        <section className="hero-row">
-          <div>
-            <p className="section-kicker">为你推荐</p>
-            <h1>今天想听一点松弛的</h1>
-            <p className="hero-copy">根据播放、喜欢、本地导入和曲库补全实时更新。</p>
-          </div>
-          <div className="hero-actions">
-            <button className="quiet-action local-import" onClick={() => void handleLocalImportClick()}>
-              <Upload size={15} />
-              <span>添加本地音乐</span>
-            </button>
-            <input
-              ref={localFileInputRef}
-              aria-label="添加本地音乐"
-              className="visually-hidden"
-              type="file"
-              accept="audio/*,.mp3,.flac,.wav,.m4a,.aac,.ogg,.aif,.aiff,.alac"
-              multiple
-              onChange={handleLocalFiles}
-            />
-            <button className="quiet-action" onClick={playMoreSimilar}>
-              <Sparkles size={15} />
-              <span>播放更多相似</span>
-            </button>
-          </div>
-        </section>
-
-        <section className="feature-grid" aria-label="推荐内容">
-          {recommendationCards.map((card) => (
-            <button className={`music-card ${card.tone}`} key={card.title} onClick={() => openRecommendation(card)} type="button">
-              <h2>{card.title}</h2>
-              <p>{card.detail}</p>
-            </button>
-          ))}
-        </section>
-
-        <div className="workbench-grid">
-          <section className="library-strip glass-panel">
-            <div>
-              <p className="section-kicker">{activeKicker}</p>
-              <h2>{activeCopy.title}</h2>
-              <p className="library-subtitle">{activeCopy.description}</p>
-              <p className="library-note">缺失歌曲会进入后台补全队列，完成后自动回到曲库。</p>
-            </div>
-            <div className="track-list" aria-label="歌曲列表">
-              {filteredTracks.map((track) => {
-                const badge = getTrackBadge(track);
-
-                return (
-                  <button
-                    className={track.id === currentTrack?.id ? 'track-row active' : 'track-row'}
-                    key={track.id}
-                    onClick={() => selectTrack(track)}
-                    onDoubleClick={() => selectTrack(track, { keepPlaying: true })}
-                  >
-                    <span className="track-cover">
-                      <TrackArtwork className="cover-chip" track={track} />
-                      {track.id === currentTrack?.id && isPlaying ? (
-                        <span aria-hidden="true" className="playing-bars">
-                          <i />
-                          <i />
-                          <i />
-                        </span>
-                      ) : null}
-                    </span>
-                    <div>
-                      <strong>{track.title}</strong>
-                      <span>{getTrackSubtitle(track)}</span>
-                    </div>
-                    {badge ? <em>{badge}</em> : null}
-                  </button>
-                );
-              })}
-              {filteredTracks.length === 0 ? (
-                <div className="empty-state">
-                  <Music2 size={18} />
-                  <span>{emptyState.message}</span>
-                </div>
-              ) : null}
-            </div>
-          </section>
-
-          <section className="player-focus glass-panel" aria-label="当前播放">
-            <TrackArtwork className="focus-cover" track={currentTrack} />
-            <div className="focus-heading">
-              <div>
-              <p className="section-kicker">正在播放</p>
-              <h2>{currentTrack.title}</h2>
-              <p>{getTrackSubtitle(currentTrack)}</p>
-              </div>
-              <div className="focus-actions">
-                <button aria-label="新建歌单" className="like-button" onClick={createUserPlaylistFromCurrentTrack}>
-                  <ListMusic size={18} />
-                </button>
-                {isActiveUserPlaylist && !activeUserPlaylistHasCurrentTrack ? (
-                  <button aria-label="加入当前歌单" className="like-button" onClick={addCurrentTrackToActiveUserPlaylist}>
-                    <ListPlus size={18} />
-                  </button>
-                ) : null}
-                {isActiveUserPlaylist && activeUserPlaylistHasCurrentTrack ? (
-                  <button aria-label="从当前歌单移除" className="like-button" onClick={removeCurrentTrackFromActiveUserPlaylist}>
-                    <SkipForward size={18} />
-                  </button>
-                ) : null}
-                {canRemoveCurrentLocalTrack ? (
-                  <button aria-label="移出本地音乐" className="like-button" onClick={() => void removeCurrentLocalTrack()}>
-                    <ListMinus size={18} />
-                  </button>
-                ) : null}
-                {canRevealCurrentLocalTrack ? (
-                  <button aria-label="在访达中显示" className="like-button" onClick={() => void revealCurrentLocalTrack()}>
-                    <LocateFixed size={18} />
-                  </button>
-                ) : null}
-                <button aria-label="加入今日循环" className="like-button" onClick={addCurrentTrackToTodayLoop}>
-                  <ListPlus size={18} />
-                </button>
-                <button
-                  aria-label={currentTrack.liked ? '取消喜欢当前歌曲' : '喜欢当前歌曲'}
-                  className={currentTrack.liked ? 'like-button active' : 'like-button'}
-                  onClick={toggleCurrentTrackLike}
-                >
-                  <Heart size={18} fill={currentTrack.liked ? 'currentColor' : 'none'} />
-                </button>
-              </div>
-            </div>
-            <div className="lyrics-window" aria-label="歌词">
-              {currentLyrics.map(
-                (line, index) => (
-                  <p className={index === currentLyricIndex ? 'current' : ''} key={`${currentTrack.id}:${line.at}`}>
-                    {line.text}
-                  </p>
-                ),
-              )}
-            </div>
-            <section className="up-next" aria-label="即将播放">
-              <p className="section-kicker">即将播放</p>
-              {upcomingTracks.length > 0 ? (
-                upcomingTracks.map((track) => (
-                  <button className="queue-chip" key={track.id} onClick={() => selectTrack(track)}>
-                    <span>{track.title}</span>
-                    <small>{track.artist}</small>
-                  </button>
-                ))
-              ) : (
-                <p className="queue-empty">当前队列没有更多歌曲</p>
-              )}
-            </section>
-          </section>
+        <div className="content-head">
+          <h2>{activeCopy.title}</h2>
+          <button className="quiet-action local-import" onClick={() => void handleLocalImportClick()}>
+            <Upload size={15} />
+            <span>添加本地音乐</span>
+          </button>
+          <input
+            ref={localFileInputRef}
+            aria-label="添加本地音乐"
+            className="visually-hidden"
+            type="file"
+            accept="audio/*,.mp3,.flac,.wav,.m4a,.aac,.ogg,.aif,.aiff,.alac"
+            multiple
+            onChange={handleLocalFiles}
+          />
         </div>
+
+        <section className="library-strip glass-panel">
+          <div className="track-list" aria-label="歌曲列表">
+            {filteredTracks.map((track) => {
+              const badge = getTrackBadge(track);
+
+              return (
+                <button
+                  className={track.id === currentTrack?.id ? 'track-row active' : 'track-row'}
+                  key={track.id}
+                  onClick={() => selectTrack(track)}
+                  onDoubleClick={() => selectTrack(track, { keepPlaying: true })}
+                >
+                  {track.id === currentTrack?.id && isPlaying ? (
+                    <span aria-hidden="true" className="playing-bars">
+                      <i />
+                      <i />
+                      <i />
+                    </span>
+                  ) : (
+                    <span aria-hidden="true" className="track-bullet" />
+                  )}
+                  <div>
+                    <strong>{track.title}</strong>
+                    <span>{getTrackSubtitle(track)}</span>
+                  </div>
+                  {badge ? <em>{badge}</em> : null}
+                </button>
+              );
+            })}
+            {filteredTracks.length === 0 ? (
+              <div className="empty-state">
+                <Music2 size={18} />
+                <span>{emptyState.message}</span>
+              </div>
+            ) : null}
+          </div>
+        </section>
       </main>
 
       <footer className="player-bar glass-panel">
-        <div className="now-playing">
-          <button
-            aria-label="打开播放页"
-            className="album-art-button"
-            onClick={() => setIsNowPlayingOpen(true)}
-          >
-            <TrackArtwork className="album-art" track={currentTrack} />
-            <span aria-hidden="true" className="album-art-open">
-              <ChevronDown size={16} />
-            </span>
-          </button>
-          <div>
-            <strong>{currentTrack.title}</strong>
+        <section className="now-playing" aria-label="当前播放">
+          <TrackArtwork className="album-art" track={currentTrack} />
+          <div className="now-playing-meta">
+            <h2>{currentTrack.title}</h2>
             <span>
               {getTrackSubtitle(currentTrack)}
               {getTrackBadge(currentTrack) ? ` · ${getTrackBadge(currentTrack)}` : ''}
@@ -1595,7 +1420,36 @@ export function App() {
           >
             <Heart size={16} fill={currentTrack.liked ? 'currentColor' : 'none'} />
           </button>
-        </div>
+          <button
+            aria-label="更多操作"
+            className={isTrackMenuOpen ? 'track-menu-btn active' : 'track-menu-btn'}
+            onClick={() => setIsTrackMenuOpen((open) => !open)}
+          >
+            <MoreHorizontal size={16} />
+          </button>
+          {isTrackMenuOpen ? (
+            <>
+              <div aria-hidden="true" className="track-menu-scrim" onClick={() => setIsTrackMenuOpen(false)} />
+              <div className="track-menu glass-panel" role="menu">
+                <button onClick={() => { createUserPlaylistFromCurrentTrack(); setIsTrackMenuOpen(false); }}>新建歌单</button>
+                <button aria-label="加入今日循环" onClick={() => { addCurrentTrackToTodayLoop(); setIsTrackMenuOpen(false); }}>加入今日循环</button>
+                {isActiveUserPlaylist && !activeUserPlaylistHasCurrentTrack ? (
+                  <button aria-label="加入当前歌单" onClick={() => { addCurrentTrackToActiveUserPlaylist(); setIsTrackMenuOpen(false); }}>加入当前歌单</button>
+                ) : null}
+                {isActiveUserPlaylist && activeUserPlaylistHasCurrentTrack ? (
+                  <button aria-label="从当前歌单移除" onClick={() => { removeCurrentTrackFromActiveUserPlaylist(); setIsTrackMenuOpen(false); }}>从当前歌单移除</button>
+                ) : null}
+                {canRemoveCurrentLocalTrack ? (
+                  <button aria-label="移出本地音乐" onClick={() => { void removeCurrentLocalTrack(); setIsTrackMenuOpen(false); }}>移出本地音乐</button>
+                ) : null}
+                {canRevealCurrentLocalTrack ? (
+                  <button aria-label="在访达中显示" onClick={() => { void revealCurrentLocalTrack(); setIsTrackMenuOpen(false); }}>在访达中显示</button>
+                ) : null}
+                <button onClick={() => { playMoreSimilar(); setIsTrackMenuOpen(false); }}>播放更多相似</button>
+              </div>
+            </>
+          ) : null}
+        </section>
 
         <div className="transport">
           <button
@@ -1740,7 +1594,6 @@ export function App() {
                     key={track.id}
                     onClick={() => selectTrack(track, { keepPlaying: true })}
                   >
-                    <TrackArtwork className="cover-chip" track={track} />
                     <div>
                       <strong>{track.title}</strong>
                       <span>{getTrackSubtitle(track)}</span>
@@ -1752,98 +1605,6 @@ export function App() {
             </div>
           </aside>
         </>
-      ) : null}
-
-      {isNowPlayingOpen ? (
-        <section
-          className="now-playing-page"
-          aria-label="播放页"
-          style={
-            currentTrack.coverUrl
-              ? ({ '--np-cover': `url("${currentTrack.coverUrl}")` } as CSSProperties)
-              : undefined
-          }
-        >
-          <div aria-hidden="true" className="np-backdrop" />
-          <header className="np-topbar">
-            <button aria-label="收起播放页" className="np-collapse" onClick={() => setIsNowPlayingOpen(false)}>
-              <ChevronDown size={24} />
-            </button>
-            <span className="np-kicker">正在播放</span>
-          </header>
-
-          <div className="np-stage">
-            <div className="np-cover-side">
-              <TrackArtwork className={isPlaying ? 'np-cover spinning' : 'np-cover'} track={currentTrack} />
-              <div className="np-meta">
-                <div>
-                  <h2>{currentTrack.title}</h2>
-                  <p>{getTrackSubtitle(currentTrack)}</p>
-                </div>
-                <button
-                  aria-label={currentTrack.liked ? '取消喜欢当前歌曲' : '喜欢当前歌曲'}
-                  className={currentTrack.liked ? 'np-like active' : 'np-like'}
-                  onClick={toggleCurrentTrackLike}
-                >
-                  <Heart size={20} fill={currentTrack.liked ? 'currentColor' : 'none'} />
-                </button>
-              </div>
-
-              <div className="np-progress">
-                <span>{formatPlaybackTime(playbackTime.current)}</span>
-                <input
-                  aria-label="播放进度"
-                  className="np-progress-slider"
-                  max={playbackTime.duration}
-                  min="0"
-                  type="range"
-                  value={Math.floor(playbackTime.current)}
-                  onChange={(event) => handleSeekChange(Number(event.target.value))}
-                />
-                <span>{formatPlaybackTime(playbackTime.duration)}</span>
-              </div>
-
-              <div className="np-transport">
-                <button
-                  aria-label={`播放模式：${playbackModeCopy[playbackMode]}`}
-                  className={playbackMode === 'queue' ? '' : 'mode-active'}
-                  onClick={cyclePlaybackMode}
-                >
-                  <ModeIcon size={20} />
-                </button>
-                <button aria-label="上一首" onClick={() => moveInQueue('previous')}>
-                  <SkipBack size={22} fill="currentColor" />
-                </button>
-                <button aria-label={isPlaying ? '暂停' : '播放'} className="np-play" onClick={togglePlayback}>
-                  {isPlaying ? <Pause size={26} fill="currentColor" /> : <Play size={26} fill="currentColor" />}
-                </button>
-                <button aria-label="下一首" onClick={skipToNextTrack}>
-                  <SkipForward size={22} fill="currentColor" />
-                </button>
-                <button
-                  aria-label={`睡眠定时：${sleepTimerLabel}`}
-                  className={sleepTimerMinutes ? 'mode-active' : ''}
-                  onClick={cycleSleepTimer}
-                >
-                  <Timer size={20} />
-                </button>
-              </div>
-            </div>
-
-            <div className="np-lyrics" aria-label="歌词" ref={nowPlayingLyricsRef}>
-              {currentLyrics.map((line, index) => (
-                <button
-                  className={index === currentLyricIndex ? 'np-lyric-line current' : 'np-lyric-line'}
-                  key={`np:${currentTrack.id}:${line.at}`}
-                  type="button"
-                  onClick={() => handleSeekChange(line.at)}
-                >
-                  {line.text}
-                </button>
-              ))}
-            </div>
-          </div>
-        </section>
       ) : null}
     </div>
   );
