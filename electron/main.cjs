@@ -1,5 +1,4 @@
 const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
-const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const {
@@ -9,9 +8,7 @@ const {
   readSidecarArtwork,
   readSidecarLyrics,
 } = require('./music-library.cjs');
-
-const MUSICOL_DIR = process.env.MUSICOL_DIR || '/Users/taomic/musicol';
-const DOWNLOADER_PATH = path.join(MUSICOL_DIR, 'downloader.js');
+const { searchSongs, downloadSong } = require('./fangpi-source.cjs');
 
 function createWindow() {
   const window = new BrowserWindow({
@@ -70,51 +67,35 @@ function removeFromLocalLibrary(filePath) {
   return remaining;
 }
 
-ipcMain.handle('musicol:resolve', async (_event, query) => {
+ipcMain.handle('fangpi:search', async (_event, query) => {
   const normalizedQuery = String(query || '').trim();
 
   if (!normalizedQuery) {
-    throw new Error('曲库补全需要关键词');
+    return [];
   }
 
-  if (!fs.existsSync(DOWNLOADER_PATH)) {
-    throw new Error(`没有找到 musicol downloader: ${DOWNLOADER_PATH}`);
+  try {
+    return await searchSongs(normalizedQuery);
+  } catch {
+    return [];
+  }
+});
+
+ipcMain.handle('fangpi:download', async (_event, musicId) => {
+  const id = String(musicId || '').trim();
+
+  if (!id) {
+    return { error: '缺少歌曲 ID' };
   }
 
   const outputDir = path.join(app.getPath('music'), 'TeaMusic', 'Resolved');
   fs.mkdirSync(outputDir, { recursive: true });
-  const before = new Set(listAudioFiles(outputDir));
 
-  return new Promise((resolve, reject) => {
-    const child = spawn('node', [DOWNLOADER_PATH, '--keyword', normalizedQuery, '--limit', '1', '--out', outputDir], {
-      cwd: MUSICOL_DIR,
-      env: process.env,
-    });
-    let stdout = '';
-    let stderr = '';
-
-    child.stdout.on('data', (chunk) => {
-      stdout += chunk.toString();
-    });
-    child.stderr.on('data', (chunk) => {
-      stderr += chunk.toString();
-    });
-    child.on('error', reject);
-    child.on('close', (code) => {
-      const files = listAudioFiles(outputDir).filter((filePath) => !before.has(filePath));
-
-      if (code !== 0) {
-        reject(new Error(stderr || stdout || `musicol exited with ${code}`));
-        return;
-      }
-
-      resolve({
-        files,
-        outputDir,
-        stdout,
-      });
-    });
-  });
+  try {
+    return await downloadSong(id, outputDir);
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : '下载失败' };
+  }
 });
 
 ipcMain.handle('musicol:scan-resolved', async () => {

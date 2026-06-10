@@ -10,11 +10,10 @@ declare global {
       revealLocalAudioFile?(filePath: string): Promise<boolean>;
       readLocalArtwork?(filePath: string): Promise<string | null>;
       readLocalLyrics?(filePath: string): Promise<string | null>;
-      resolveMissingTrack(query: string): Promise<{
-        files: string[];
-        outputDir: string;
-        stdout: string;
-      }>;
+      searchOnline(query: string): Promise<Array<{ id: string; title: string; artist: string }>>;
+      downloadOnline(
+        musicId: string,
+      ): Promise<{ filePath: string; title: string; artist: string } | { error: string }>;
     };
   }
 }

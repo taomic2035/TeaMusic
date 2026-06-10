@@ -8,5 +8,6 @@ contextBridge.exposeInMainWorld('teaMusicBackend', {
   revealLocalAudioFile: (filePath) => ipcRenderer.invoke('musicol:reveal-local', filePath),
   readLocalLyrics: (filePath) => ipcRenderer.invoke('musicol:read-lyrics', filePath),
   readLocalArtwork: (filePath) => ipcRenderer.invoke('musicol:read-artwork', filePath),
-  resolveMissingTrack: (query) => ipcRenderer.invoke('musicol:resolve', query),
+  searchOnline: (query) => ipcRenderer.invoke('fangpi:search', query),
+  downloadOnline: (musicId) => ipcRenderer.invoke('fangpi:download', musicId),
 });

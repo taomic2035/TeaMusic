@@ -25,4 +25,15 @@ describe('Electron main window', () => {
     expect(preloadSource).toContain('revealLocalAudioFile');
     expect(mainSource).not.toContain('openExternal');
   });
+
+  it('exposes in-process fangpi search and download, no external spawn', () => {
+    expect(mainSource).toContain("ipcMain.handle('fangpi:search'");
+    expect(mainSource).toContain("ipcMain.handle('fangpi:download'");
+    expect(mainSource).toContain("require('./fangpi-source.cjs')");
+    expect(mainSource).not.toContain('child_process');
+    expect(mainSource).not.toContain('MUSICOL_DIR');
+    expect(preloadSource).toContain('searchOnline');
+    expect(preloadSource).toContain('downloadOnline');
+    expect(preloadSource).not.toContain('resolveMissingTrack');
+  });
 });
