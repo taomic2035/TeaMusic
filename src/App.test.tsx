@@ -284,7 +284,7 @@ describe('App shell', () => {
 
   it('opens the hidden finder and downloads an online track into the library', async () => {
     const downloadOnline = vi.fn(async () => ({
-      filePath: 'D:/Music/TeaMusic/Resolved/周杰伦/晴天-周杰伦.mp3',
+      filePath: 'D:/Music/TeaMusic/Archive/周杰伦/晴天 - 周杰伦.mp3',
       title: '晴天',
       artist: '周杰伦',
     }));
@@ -320,20 +320,27 @@ describe('App shell', () => {
     delete window.teaMusicBackend;
   });
 
-  it('lets the user open a verification page and retry a protected online download', async () => {
-    const downloadOnline = vi.fn(async () => ({
-      error: '需要真人检测，验证后再重试下载',
-      code: 'VERIFY_REQUIRED' as const,
-      verifyUrl: 'https://www.fangpi.net/music/402856',
-    }));
-    const openExternalUrl = vi.fn(async () => true);
+  it('opens an in-app verification window and retries a protected online download automatically', async () => {
+    const downloadOnline = vi
+      .fn()
+      .mockResolvedValueOnce({
+        error: '需要真人检测，验证后再重试下载',
+        code: 'VERIFY_REQUIRED' as const,
+        verifyUrl: 'https://www.fangpi.net/music/402856',
+      })
+      .mockResolvedValueOnce({
+        filePath: 'D:/Music/TeaMusic/Archive/周杰伦/晴天 - 周杰伦.mp3',
+        title: '晴天',
+        artist: '周杰伦',
+      });
+    const openVerificationPage = vi.fn(async () => true);
     window.teaMusicBackend = {
       scanResolvedLibrary: async () => [],
       scanLocalLibrary: async () => [],
       chooseLocalAudioFiles: async () => [],
       searchOnline: async () => [{ id: '402856', title: '晴天', artist: '周杰伦' }],
       downloadOnline,
-      openExternalUrl,
+      openVerificationPage,
     };
 
     render(<App />);
@@ -352,10 +359,15 @@ describe('App shell', () => {
     await waitFor(() => {
       expect(screen.getByText(/需要真人检测/)).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByRole('button', { name: '打开验证页面' }));
+    fireEvent.click(screen.getByRole('button', { name: '打开验证窗口' }));
 
-    expect(openExternalUrl).toHaveBeenCalledWith('https://www.fangpi.net/music/402856');
-    expect(screen.getByRole('button', { name: '重试下载 晴天' })).toBeInTheDocument();
+    expect(openVerificationPage).toHaveBeenCalledWith('https://www.fangpi.net/music/402856');
+    await waitFor(() => {
+      expect(downloadOnline).toHaveBeenCalledTimes(2);
+    });
+    await waitFor(() => {
+      expect(within(getLibrary()).getByRole('button', { name: /晴天/ })).toBeInTheDocument();
+    });
 
     delete window.teaMusicBackend;
   });

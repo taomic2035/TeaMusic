@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell, session } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const {
@@ -8,7 +8,7 @@ const {
   readSidecarArtwork,
   readSidecarLyrics,
 } = require('./music-library.cjs');
-const { searchSongs, downloadSong } = require('./fangpi-source.cjs');
+const { searchSongs, downloadSong, withRequestHeaders } = require('./fangpi-source.cjs');
 
 function createWindow() {
   const window = new BrowserWindow({
@@ -67,13 +67,35 @@ function removeFromLocalLibrary(filePath) {
   return remaining;
 }
 
-function isAllowedExternalUrl(rawUrl) {
+function resolvedLibraryPath() {
+  return path.join(app.getPath('music'), 'TeaMusic', 'Archive');
+}
+
+function legacyResolvedLibraryPath() {
+  return path.join(app.getPath('music'), 'TeaMusic', 'Resolved');
+}
+
+function normalizeFangpiUrl(rawUrl) {
   try {
     const url = new URL(String(rawUrl || ''));
-    return (url.protocol === 'https:' || url.protocol === 'http:') && url.hostname === 'www.fangpi.net';
+    if ((url.protocol !== 'https:' && url.protocol !== 'http:') || url.hostname !== 'www.fangpi.net') {
+      return null;
+    }
+
+    return url;
   } catch {
-    return false;
+    return null;
   }
+}
+
+function formatCookieHeader(cookies) {
+  return cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join('; ');
+}
+
+async function fangpiRequestHeaders() {
+  const cookies = await session.defaultSession.cookies.get({ url: 'https://www.fangpi.net' });
+  const cookieHeader = formatCookieHeader(cookies);
+  return cookieHeader ? { Cookie: cookieHeader } : {};
 }
 
 ipcMain.handle('fangpi:search', async (_event, query) => {
@@ -97,11 +119,13 @@ ipcMain.handle('fangpi:download', async (_event, musicId) => {
     return { error: '缺少歌曲 ID' };
   }
 
-  const outputDir = path.join(app.getPath('music'), 'TeaMusic', 'Resolved');
+  const outputDir = resolvedLibraryPath();
   fs.mkdirSync(outputDir, { recursive: true });
 
   try {
-    return await downloadSong(id, outputDir);
+    const requestHeaders = await fangpiRequestHeaders();
+    const deps = Object.keys(requestHeaders).length > 0 ? withRequestHeaders(requestHeaders) : undefined;
+    return await downloadSong(id, outputDir, deps);
   } catch (error) {
     if (error && error.code === 'VERIFY_REQUIRED' && error.verifyUrl) {
       return { error: error.message, code: error.code, verifyUrl: error.verifyUrl };
@@ -111,18 +135,65 @@ ipcMain.handle('fangpi:download', async (_event, musicId) => {
   }
 });
 
-ipcMain.handle('shell:open-external', async (_event, rawUrl) => {
-  if (!isAllowedExternalUrl(rawUrl)) {
+ipcMain.handle('fangpi:verify', async (event, rawUrl) => {
+  const verificationUrl = normalizeFangpiUrl(rawUrl);
+
+  if (!verificationUrl) {
     return false;
   }
 
-  await shell.openExternal(String(rawUrl));
-  return true;
+  const parentWindow = BrowserWindow.fromWebContents(event.sender);
+
+  return new Promise((resolve) => {
+    const verifyWindow = new BrowserWindow({
+      width: 520,
+      height: 720,
+      minWidth: 420,
+      minHeight: 560,
+      title: 'TeaMusic 真人检测',
+      parent: parentWindow || undefined,
+      modal: Boolean(parentWindow),
+      backgroundColor: '#101114',
+      icon: path.join(__dirname, '..', 'assets', 'brand', 'teamusic-icon.png'),
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+      },
+    });
+    let isSettled = false;
+
+    function settle(value) {
+      if (isSettled) {
+        return;
+      }
+
+      isSettled = true;
+      resolve(value);
+    }
+
+    verifyWindow.webContents.setWindowOpenHandler(({ url }) => {
+      const nextUrl = normalizeFangpiUrl(url);
+
+      if (nextUrl) {
+        void verifyWindow.loadURL(nextUrl.href);
+      }
+
+      return { action: 'deny' };
+    });
+    verifyWindow.on('closed', () => settle(true));
+    verifyWindow.loadURL(verificationUrl.href).catch(() => {
+      if (!verifyWindow.isDestroyed()) {
+        verifyWindow.close();
+      }
+
+      settle(false);
+    });
+  });
 });
 
 ipcMain.handle('musicol:scan-resolved', async () => {
-  const outputDir = path.join(app.getPath('music'), 'TeaMusic', 'Resolved');
-  return listAudioFiles(outputDir);
+  return Array.from(new Set([...listAudioFiles(resolvedLibraryPath()), ...listAudioFiles(legacyResolvedLibraryPath())]));
 });
 
 ipcMain.handle('musicol:scan-local', async () => {

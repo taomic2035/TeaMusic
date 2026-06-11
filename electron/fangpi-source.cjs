@@ -168,6 +168,16 @@ function downloadBinary(urlStr, destPath) {
 
 const defaultDeps = { httpGet, httpPost, downloadBinary };
 
+function withRequestHeaders(extraHeaders, deps = defaultDeps) {
+  const headers = extraHeaders && typeof extraHeaders === 'object' ? extraHeaders : {};
+
+  return {
+    ...deps,
+    httpGet: (urlStr, requestHeaders = {}) => deps.httpGet(urlStr, { ...requestHeaders, ...headers }),
+    httpPost: (urlStr, data, requestHeaders = {}) => deps.httpPost(urlStr, data, { ...requestHeaders, ...headers }),
+  };
+}
+
 // ── kuwo antiserver 链接转换 ─────────────────────────────
 async function convertKuwoUrl(origUrl, deps) {
   try {
@@ -209,7 +219,7 @@ async function downloadSong(musicId, outDir, deps = defaultDeps) {
   const { title, artist, url } = await resolvePlayUrl(musicId, deps);
   const artistDir = path.join(outDir, sanitize(artist));
   fs.mkdirSync(artistDir, { recursive: true });
-  const filePath = path.join(artistDir, `${sanitize(title)}-${sanitize(artist)}.mp3`);
+  const filePath = path.join(artistDir, `${sanitize(title)} - ${sanitize(artist)}.mp3`);
   if (fs.existsSync(filePath)) return { filePath, title, artist };
   await deps.downloadBinary(url, filePath);
   return { filePath, title, artist };
@@ -223,5 +233,6 @@ module.exports = {
   searchSongs,
   resolvePlayUrl,
   downloadSong,
+  withRequestHeaders,
   VerificationRequiredError,
 };

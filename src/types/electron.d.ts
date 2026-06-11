@@ -17,7 +17,7 @@ declare global {
         | { filePath: string; title: string; artist: string }
         | { error: string; code?: 'VERIFY_REQUIRED'; verifyUrl?: string }
       >;
-      openExternalUrl?(url: string): Promise<boolean>;
+      openVerificationPage?(url: string): Promise<boolean>;
     };
   }
 }

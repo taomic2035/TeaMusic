@@ -24,13 +24,14 @@ describe('Electron main window', () => {
     expect(mainSource).not.toMatch(/unlinkSync|rmSync|deleteFile|trashItem/);
   });
 
-  it('reveals local music in Finder through the shell and opens only explicit verification links externally', () => {
+  it('reveals local music in Finder through the shell and opens verification inside the app', () => {
     expect(mainSource).toContain("ipcMain.handle('musicol:reveal-local'");
     expect(mainSource).toContain('showItemInFolder');
     expect(preloadSource).toContain('revealLocalAudioFile');
-    expect(mainSource).toContain("ipcMain.handle('shell:open-external'");
-    expect(mainSource).toContain('shell.openExternal');
-    expect(preloadSource).toContain('openExternalUrl');
+    expect(mainSource).toContain("ipcMain.handle('fangpi:verify'");
+    expect(mainSource).toContain('BrowserWindow');
+    expect(mainSource).toContain('loadURL(verificationUrl.href)');
+    expect(preloadSource).toContain('openVerificationPage');
   });
 
   it('exposes in-process fangpi search and download, no external spawn', () => {
@@ -42,5 +43,12 @@ describe('Electron main window', () => {
     expect(preloadSource).toContain('searchOnline');
     expect(preloadSource).toContain('downloadOnline');
     expect(preloadSource).not.toContain('resolveMissingTrack');
+  });
+
+  it('archives new online downloads under a defined TeaMusic archive path with browser cookies', () => {
+    expect(mainSource).toContain("'TeaMusic', 'Archive'");
+    expect(mainSource).toContain('formatCookieHeader');
+    expect(mainSource).toContain('withRequestHeaders');
+    expect(mainSource).toContain('session.defaultSession.cookies.get');
   });
 });

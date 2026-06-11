@@ -626,15 +626,24 @@ export function App() {
   async function openFinderVerification() {
     const backend = window.teaMusicBackend;
 
-    if (!finderVerification?.verifyUrl || !backend?.openExternalUrl) {
-      setFinderError('无法打开验证页面，请稍后再试');
+    if (!finderVerification?.verifyUrl || !backend?.openVerificationPage) {
+      setFinderError('无法打开验证窗口，请稍后再试');
       return;
     }
 
-    const opened = await backend.openExternalUrl(finderVerification.verifyUrl);
+    const verification = finderVerification;
+    const opened = await backend.openVerificationPage(verification.verifyUrl);
 
     if (!opened) {
-      setFinderError('无法打开验证页面，请稍后再试');
+      setFinderError('无法打开验证窗口，请稍后再试');
+      return;
+    }
+
+    const retrySong = finderResults.find((row) => row.id === verification.songId);
+
+    if (retrySong) {
+      setFinderError('验证窗口已关闭，正在继续下载...');
+      await downloadFromFinder(retrySong);
     }
   }
 
@@ -1125,7 +1134,7 @@ export function App() {
             {finderVerification ? (
               <div className="finder-verification">
                 <button type="button" onClick={() => void openFinderVerification()}>
-                  打开验证页面
+                  打开验证窗口
                 </button>
                 <button
                   type="button"
@@ -1145,7 +1154,7 @@ export function App() {
             <div className="finder-source-note" aria-label="素材来源说明">
               <span>封面：同名图片、cover 或 folder</span>
               <span>歌词：同名 .lrc</span>
-              <span>下载：在线搜索后保存到系统音乐目录</span>
+              <span>下载：保存到音乐/TeaMusic/Archive 并按歌手归档</span>
             </div>
             <ul className="finder-list">
               {finderResults.map((song) => (

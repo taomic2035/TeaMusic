@@ -10,6 +10,7 @@ const fangpi = require('./fangpi-source.cjs') as {
   resolvePlayUrl(musicId: string, deps: unknown): Promise<{ title: string; artist: string; url: string }>;
   downloadSong(musicId: string, outDir: string, deps: unknown): Promise<{ filePath: string; title: string; artist: string }>;
   searchSongs(keyword: string, deps?: unknown): Promise<Array<{ id: string; title: string; artist: string }>>;
+  withRequestHeaders(extraHeaders: Record<string, string>, deps: unknown): unknown;
 };
 
 describe('fangpi-source pure helpers', () => {
@@ -46,6 +47,33 @@ describe('fangpi-source pure helpers', () => {
   it('extracts mp3 url from common-play-url json and throws on failure', () => {
     expect(fangpi.extractPlayUrl('{"code":1,"data":{"url":"https://x/y.mp3"}}')).toBe('https://x/y.mp3');
     expect(() => fangpi.extractPlayUrl('{"code":0,"msg":"页面已被删除"}')).toThrow('页面已被删除');
+  });
+  it('wraps page requests with verification cookies without changing binary downloads', async () => {
+    const calls: Array<{ type: string; headers?: Record<string, string> }> = [];
+    const deps = {
+      httpGet: async (_url: string, headers?: Record<string, string>) => {
+        calls.push({ type: 'get', headers });
+        return '';
+      },
+      httpPost: async (_url: string, _data: unknown, headers?: Record<string, string>) => {
+        calls.push({ type: 'post', headers });
+        return '';
+      },
+      downloadBinary: async () => {
+        calls.push({ type: 'download' });
+      },
+    };
+
+    const wrapped = fangpi.withRequestHeaders({ Cookie: 'fp_verify=1' }, deps) as typeof deps;
+    await wrapped.httpGet('https://www.fangpi.net/music/1');
+    await wrapped.httpPost('https://www.fangpi.net/member/common-play-url', {});
+    await wrapped.downloadBinary();
+
+    expect(calls).toEqual([
+      { type: 'get', headers: { Cookie: 'fp_verify=1' } },
+      { type: 'post', headers: { Cookie: 'fp_verify=1' } },
+      { type: 'download' },
+    ]);
   });
 });
 
@@ -96,6 +124,6 @@ describe('fangpi-source orchestration (injected http)', () => {
     expect(result.title).toBe('晴天');
     expect(result.filePath).toBe(downloadedTo);
     expect(fsm.existsSync(result.filePath)).toBe(true);
-    expect(result.filePath).toContain('晴天-周杰伦.mp3');
+    expect(result.filePath).toContain('晴天 - 周杰伦.mp3');
   });
 });
