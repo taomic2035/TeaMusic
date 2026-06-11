@@ -225,12 +225,224 @@ button {
   z-index: 1;
   flex: 1;
   min-height: 0;
-  overflow: auto;
-  padding: 4px 10px 12px;
+  overflow: hidden;
+  padding: 0;
 }
 
 .content::-webkit-scrollbar {
   display: none;
+}
+
+.immersive-player {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-rows: auto auto auto minmax(96px, 1fr) auto auto;
+  height: 100%;
+  padding: 18px 22px 24px;
+  color: var(--theme-text-strong, rgba(255, 255, 255, 0.94));
+}
+
+.immersive-top,
+.immersive-controls,
+.immersive-progress {
+  display: flex;
+  align-items: center;
+}
+
+.immersive-top {
+  justify-content: space-between;
+  min-height: 34px;
+  font-size: 15px;
+  font-weight: 720;
+  -webkit-app-region: drag;
+}
+
+.immersive-top button,
+.immersive-controls button {
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.immersive-cover-wrap {
+  display: grid;
+  place-items: center;
+  padding: 18px 0 14px;
+}
+
+.immersive-cover {
+  width: min(72vw, 286px);
+  aspect-ratio: 1;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  object-fit: cover;
+  background: linear-gradient(145deg, var(--theme-accent-soft, rgba(123, 255, 180, 0.18)), rgba(255, 255, 255, 0.08));
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.42);
+}
+
+.immersive-meta {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  min-width: 0;
+  text-align: center;
+}
+
+.immersive-meta h2 {
+  max-width: 100%;
+  margin: 0;
+  overflow: hidden;
+  font-size: 24px;
+  line-height: 1.16;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.immersive-meta span {
+  max-width: 100%;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.immersive-meta em {
+  padding: 3px 8px;
+  border: 1px solid color-mix(in srgb, var(--theme-accent, #7bffb4) 42%, transparent);
+  border-radius: 999px;
+  background: var(--theme-accent-soft, rgba(123, 255, 180, 0.18));
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.immersive-progress {
+  gap: 10px;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 12px;
+}
+
+.immersive-controls {
+  position: relative;
+  justify-content: center;
+  gap: 10px;
+  padding-top: 16px;
+}
+
+.immersive-controls button {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  color: rgba(255, 255, 255, 0.78);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.immersive-controls button:hover,
+.immersive-controls button.active,
+.immersive-controls .mode-active {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.immersive-controls .play-button {
+  width: 58px;
+  height: 58px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #101114;
+}
+
+.library-drawer-shell,
+.library-drawer-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 58;
+  -webkit-app-region: no-drag;
+}
+
+.library-drawer-scrim {
+  background: rgba(3, 5, 8, 0.45);
+}
+
+.library-drawer {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  left: 10px;
+  z-index: 59;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  max-height: min(72vh, 620px);
+  padding: 12px;
+  border-radius: 22px;
+  animation: drawer-rise 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.library-drawer-head,
+.drawer-search {
+  display: flex;
+  align-items: center;
+}
+
+.library-drawer-head {
+  justify-content: space-between;
+  padding: 2px 4px 10px;
+}
+
+.library-drawer-head button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.drawer-search {
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.drawer-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.drawer-list {
+  overflow-y: auto;
+  padding-top: 10px;
+  scrollbar-width: none;
+}
+
+.drawer-list::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes drawer-rise {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 .track-list {

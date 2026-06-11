@@ -16,20 +16,35 @@ describe('App shell', () => {
   }
 
   function openSearch() {
-    fireEvent.click(screen.getByLabelText('更多操作'));
-    fireEvent.click(screen.getByText('搜索'));
+    fireEvent.click(screen.getByLabelText('搜索'));
+  }
+
+  function openLibrary() {
+    fireEvent.click(screen.getByLabelText('打开歌曲列表'));
+    return screen.getByRole('dialog', { name: '歌曲列表' });
+  }
+
+  function getLibrary() {
+    return screen.queryByRole('dialog', { name: '歌曲列表' }) ?? openLibrary();
   }
 
   function openVolume() {
+    fireEvent.click(screen.getByLabelText('更多操作'));
     fireEvent.click(screen.getByLabelText('音量'));
+  }
+
+  function getMainSearchInput() {
+    return document.querySelector('.search-bar input') as HTMLInputElement;
   }
 
   it('renders a single-screen minimal player without sidebar, toolbar or playlists', () => {
     render(<App />);
 
-    expect(screen.getByLabelText('歌曲列表')).toBeInTheDocument();
+    expect(screen.getByLabelText('沉浸播放页')).toBeInTheDocument();
+    expect(screen.getByLabelText('打开歌曲列表')).toBeInTheDocument();
     expect(screen.getByLabelText('当前播放')).toBeInTheDocument();
     expect(screen.getByLabelText('更多操作')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: '歌曲列表' })).not.toBeInTheDocument();
 
     expect(screen.queryByRole('banner')).not.toBeInTheDocument();
     expect(screen.queryByText('发现')).not.toBeInTheDocument();
@@ -98,7 +113,7 @@ describe('App shell', () => {
     await waitFor(() => {
       expect(screen.getAllByText('玻璃夜航').length).toBeGreaterThan(0);
     });
-    expect(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /玻璃夜航/ })).toHaveTextContent('Taomic');
+    expect(within(getLibrary()).getByRole('button', { name: /玻璃夜航/ })).toHaveTextContent('Taomic');
     expect(screen.getAllByText('本地').length).toBeGreaterThan(0);
 
     delete window.teaMusicBackend;
@@ -114,12 +129,12 @@ describe('App shell', () => {
     render(<App />);
     importViaMenu();
     await waitFor(() => {
-      expect(within(screen.getByLabelText('歌曲列表')).getByText('玻璃夜航')).toBeInTheDocument();
+      expect(within(getLibrary()).getByText('玻璃夜航')).toBeInTheDocument();
     });
 
     importViaMenu();
     await waitFor(() => {
-      expect(within(screen.getByLabelText('歌曲列表')).getAllByText('玻璃夜航')).toHaveLength(1);
+      expect(within(getLibrary()).getAllByText('玻璃夜航')).toHaveLength(1);
     });
 
     delete window.teaMusicBackend;
@@ -137,10 +152,10 @@ describe('App shell', () => {
     render(<App />);
     importViaMenu();
     await waitFor(() => {
-      expect(within(screen.getByLabelText('歌曲列表')).getByText('手动喜欢还在')).toBeInTheDocument();
+      expect(within(getLibrary()).getByText('手动喜欢还在')).toBeInTheDocument();
     });
 
-    fireEvent.click(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /手动喜欢还在/ }));
+    fireEvent.click(within(getLibrary()).getByRole('button', { name: /手动喜欢还在/ }));
     expect(screen.getByLabelText('取消喜欢当前歌曲')).toBeInTheDocument();
 
     delete window.teaMusicBackend;
@@ -157,10 +172,10 @@ describe('App shell', () => {
 
     render(<App />);
     await waitFor(() => {
-      expect(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /移出测试/ })).toBeInTheDocument();
+      expect(within(getLibrary()).getByRole('button', { name: /移出测试/ })).toBeInTheDocument();
     });
 
-    fireEvent.click(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /移出测试/ }));
+    fireEvent.click(within(getLibrary()).getByRole('button', { name: /移出测试/ }));
     Object.defineProperty(document.querySelector('audio') as HTMLAudioElement, 'pause', {
       configurable: true,
       value: vi.fn(),
@@ -171,7 +186,7 @@ describe('App shell', () => {
     await waitFor(() => {
       expect(removeLocalAudioFile).toHaveBeenCalledWith(filePath);
     });
-    expect(within(screen.getByLabelText('歌曲列表')).queryByRole('button', { name: /移出测试/ })).not.toBeInTheDocument();
+    expect(within(getLibrary()).queryByRole('button', { name: /移出测试/ })).not.toBeInTheDocument();
     expect(screen.queryByText('删除文件')).not.toBeInTheDocument();
 
     delete window.teaMusicBackend;
@@ -188,10 +203,10 @@ describe('App shell', () => {
 
     render(<App />);
     await waitFor(() => {
-      expect(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /访达定位/ })).toBeInTheDocument();
+      expect(within(getLibrary()).getByRole('button', { name: /访达定位/ })).toBeInTheDocument();
     });
 
-    fireEvent.click(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /访达定位/ }));
+    fireEvent.click(within(getLibrary()).getByRole('button', { name: /访达定位/ }));
     fireEvent.click(screen.getByLabelText('更多操作'));
     fireEvent.click(screen.getByLabelText('在访达中显示'));
 
@@ -258,8 +273,9 @@ describe('App shell', () => {
     await waitFor(() => {
       expect(downloadOnline).toHaveBeenCalledWith('402856');
     });
+    fireEvent.click(screen.getByLabelText('关闭在线找歌'));
     await waitFor(() => {
-      expect(screen.getAllByText('晴天').length).toBeGreaterThan(0);
+      expect(within(getLibrary()).getByRole('button', { name: /晴天/ })).toBeInTheDocument();
     });
 
     delete window.teaMusicBackend;
@@ -278,7 +294,7 @@ describe('App shell', () => {
 
     render(<App />);
     openSearch();
-    const search = screen.getByPlaceholderText('搜索歌曲、歌手');
+    const search = getMainSearchInput();
     fireEvent.change(search, { target: { value: '不存在的歌' } });
     fireEvent.keyDown(search, { key: 'Enter' });
 
@@ -295,11 +311,12 @@ describe('App shell', () => {
   it('plays a library track immediately on double click and marks it as playing', () => {
     render(<App />);
 
-    const row = within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /晴夜漫游/ });
+    const row = within(getLibrary()).getByRole('button', { name: /晴夜漫游/ });
     fireEvent.doubleClick(row);
 
     expect(within(screen.getByLabelText('当前播放')).getByRole('heading', { name: '晴夜漫游' })).toBeInTheDocument();
     expect(screen.getByLabelText('暂停')).toBeInTheDocument();
+    openLibrary();
     expect(document.querySelector('.playing-bars')).toBeInTheDocument();
   });
 
@@ -334,7 +351,7 @@ describe('App shell', () => {
 
     render(<App />);
     await waitFor(() => {
-      expect(within(screen.getByLabelText('歌曲列表')).getByText('连续一')).toBeInTheDocument();
+      expect(within(getLibrary()).getByText('连续一')).toBeInTheDocument();
     });
     fireEvent.click(screen.getByRole('button', { name: /连续一/ }));
 
@@ -470,7 +487,7 @@ describe('App shell', () => {
     render(<App />);
 
     openSearch();
-    const search = screen.getByPlaceholderText('搜索歌曲、歌手');
+    const search = getMainSearchInput();
     search.focus();
     fireEvent.keyDown(search, { key: ' ', code: 'Space' });
     fireEvent.keyDown(search, { key: 'ArrowRight' });
@@ -483,27 +500,27 @@ describe('App shell', () => {
     render(<App />);
 
     openSearch();
-    const search = screen.getByPlaceholderText('搜索歌曲、歌手') as HTMLInputElement;
+    const search = getMainSearchInput();
     fireEvent.change(search, { target: { value: '感谢' } });
-    expect(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /感谢你爱我/ })).toBeInTheDocument();
-    expect(within(screen.getByLabelText('歌曲列表')).queryByRole('button', { name: /晴夜漫游/ })).not.toBeInTheDocument();
+    expect(within(getLibrary()).getByRole('button', { name: /感谢你爱我/ })).toBeInTheDocument();
+    expect(within(getLibrary()).queryByRole('button', { name: /晴夜漫游/ })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText('关闭搜索'));
-    expect(screen.queryByPlaceholderText('搜索歌曲、歌手')).not.toBeInTheDocument();
-    expect(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /晴夜漫游/ })).toBeInTheDocument();
+    expect(document.querySelector('.search-bar')).not.toBeInTheDocument();
+    expect(within(getLibrary()).getByRole('button', { name: /晴夜漫游/ })).toBeInTheDocument();
   });
 
   it('opens search with the desktop shortcut and clears it with Escape', () => {
     render(<App />);
 
     fireEvent.keyDown(window, { key: 'f', metaKey: true });
-    const search = screen.getByPlaceholderText('搜索歌曲、歌手') as HTMLInputElement;
+    const search = getMainSearchInput();
 
     fireEvent.change(search, { target: { value: '感谢' } });
     expect(search.value).toBe('感谢');
 
     fireEvent.keyDown(search, { key: 'Escape' });
-    expect(screen.queryByPlaceholderText('搜索歌曲、歌手')).not.toBeInTheDocument();
+    expect(document.querySelector('.search-bar')).not.toBeInTheDocument();
   });
 
   it('persists the playback mode across app restarts', () => {
@@ -571,14 +588,14 @@ describe('App shell', () => {
 
     const firstSession = render(<App />);
     await waitFor(() => {
-      expect(within(screen.getByLabelText('歌曲列表')).getByText('历史还在')).toBeInTheDocument();
+      expect(within(getLibrary()).getByText('历史还在')).toBeInTheDocument();
     });
     fireEvent.click(screen.getByRole('button', { name: /历史还在/ }));
     firstSession.unmount();
 
     render(<App />);
     await waitFor(() => {
-      expect(within(screen.getByLabelText('歌曲列表')).getByText('历史还在')).toBeInTheDocument();
+      expect(within(getLibrary()).getByText('历史还在')).toBeInTheDocument();
     });
 
     delete window.teaMusicBackend;
@@ -642,7 +659,7 @@ describe('App shell', () => {
 
     render(<App />);
     await waitFor(() => {
-      expect(within(screen.getByLabelText('歌曲列表')).getByText('坏文件')).toBeInTheDocument();
+      expect(within(getLibrary()).getByText('坏文件')).toBeInTheDocument();
     });
     fireEvent.click(screen.getByRole('button', { name: /坏文件/ }));
     Object.defineProperty(document.querySelector('audio') as HTMLAudioElement, 'play', {
@@ -696,7 +713,9 @@ describe('App shell', () => {
 
     render(<App />);
 
-    expect(await screen.findByText('启动恢复')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(within(getLibrary()).getByText('启动恢复')).toBeInTheDocument();
+    });
     expect(screen.getAllByText('已补全').length).toBeGreaterThan(0);
 
     delete window.teaMusicBackend;
@@ -711,9 +730,9 @@ describe('App shell', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(within(screen.getByLabelText('歌曲列表')).getByText('重启还在')).toBeInTheDocument();
+      expect(within(getLibrary()).getByText('重启还在')).toBeInTheDocument();
     });
-    const restoredRow = within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /重启还在/ });
+    const restoredRow = within(getLibrary()).getByRole('button', { name: /重启还在/ });
     expect(restoredRow).toHaveTextContent('Taomic');
     expect(restoredRow).toHaveTextContent('本地');
 
@@ -731,9 +750,9 @@ describe('App shell', () => {
 
     render(<App />);
     await waitFor(() => {
-      expect(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /带封面/ })).toBeInTheDocument();
+      expect(within(getLibrary()).getByRole('button', { name: /带封面/ })).toBeInTheDocument();
     });
-    fireEvent.click(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /带封面/ }));
+    fireEvent.click(within(getLibrary()).getByRole('button', { name: /带封面/ }));
 
     await waitFor(() => {
       expect(readLocalArtwork).toHaveBeenCalledWith(filePath);
@@ -758,10 +777,10 @@ describe('App shell', () => {
 
     render(<App />);
     await waitFor(() => {
-      expect(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /玻璃夜航/ })).toBeInTheDocument();
+      expect(within(getLibrary()).getByRole('button', { name: /玻璃夜航/ })).toBeInTheDocument();
     });
 
-    fireEvent.click(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /玻璃夜航/ }));
+    fireEvent.click(within(getLibrary()).getByRole('button', { name: /玻璃夜航/ }));
 
     await waitFor(() => {
       expect(readLocalLyrics).toHaveBeenCalledWith(filePath);
@@ -784,7 +803,7 @@ describe('App shell', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /扫描兜底/ })).toBeInTheDocument();
+      expect(within(getLibrary()).getByRole('button', { name: /扫描兜底/ })).toBeInTheDocument();
     });
     expect(screen.getAllByText('本地').length).toBeGreaterThan(0);
 
@@ -799,13 +818,13 @@ describe('App shell', () => {
 
     render(<App />);
     await waitFor(() => {
-      expect(within(screen.getByLabelText('歌曲列表')).getByText('重启还在')).toBeInTheDocument();
+      expect(within(getLibrary()).getByText('重启还在')).toBeInTheDocument();
     });
     openSearch();
-    fireEvent.change(screen.getByPlaceholderText('搜索歌曲、歌手'), { target: { value: '深夜收藏' } });
+    fireEvent.change(getMainSearchInput(), { target: { value: '深夜收藏' } });
 
     await waitFor(() => {
-      expect(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /重启还在/ })).toHaveTextContent('Taomic · 深夜收藏');
+      expect(within(getLibrary()).getByRole('button', { name: /重启还在/ })).toHaveTextContent('Taomic · 深夜收藏');
     });
 
     delete window.teaMusicBackend;
@@ -839,9 +858,9 @@ describe('App shell', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /重启还在/ })).toBeInTheDocument();
+      expect(within(getLibrary()).getByRole('button', { name: /重启还在/ })).toBeInTheDocument();
     });
-    fireEvent.click(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /重启还在/ }));
+    fireEvent.click(within(getLibrary()).getByRole('button', { name: /重启还在/ }));
     expect(screen.getByLabelText('取消喜欢当前歌曲')).toBeInTheDocument();
 
     delete window.teaMusicBackend;

@@ -1,21 +1,11 @@
 import {
   Download,
-  Heart,
-  MoreHorizontal,
-  Music2,
-  Pause,
-  Play,
-  Repeat,
-  Repeat1,
   Search,
-  Shuffle,
-  SkipBack,
-  SkipForward,
-  Volume2,
-  VolumeX,
   X,
 } from 'lucide-react';
 import { ChangeEvent, CSSProperties, DragEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { ImmersivePlayer } from './components/ImmersivePlayer';
+import { LibraryDrawer } from './components/LibraryDrawer';
 import { LyricStage } from './components/LyricStage';
 import {
   Track,
@@ -23,21 +13,14 @@ import {
   createLocalTrackFromPath,
   createResolvedTrackFromPath,
   filterTracks,
-  formatPlaybackTime,
   getAdjacentTrackId,
-  getTrackBadge,
   markTrackPlayed,
   markTrackSkipped,
   parseLrc,
 } from './domain/music';
+import { useDominantTheme } from './hooks/useDominantTheme';
 
 type PlaybackMode = 'queue' | 'repeat-one' | 'shuffle';
-
-const playbackModeCopy: Record<PlaybackMode, string> = {
-  queue: '顺序播放',
-  'repeat-one': '单曲循环',
-  shuffle: '随机播放',
-};
 
 const mediaSessionActions = ['play', 'pause', 'previoustrack', 'nexttrack'] satisfies MediaSessionAction[];
 
@@ -283,10 +266,6 @@ function mergeTracksById(nextTracks: Track[], existingTracks: Track[]): Track[] 
   return [...nextTracks.filter((track) => !existingIds.has(track.id)), ...existingTracks];
 }
 
-function getTrackSubtitle(track: Track): string {
-  return track.album ? `${track.artist} · ${track.album}` : track.artist;
-}
-
 export function App() {
   const [tracks, setTracks] = useState(() => restorePersistedTrackState(initialTracks));
   const [query, setQuery] = useState('');
@@ -304,6 +283,7 @@ export function App() {
   const [isTrackMenuOpen, setIsTrackMenuOpen] = useState(false);
   const [isVolumeOpen, setIsVolumeOpen] = useState(false);
   const [isLyricsFullscreenOpen, setIsLyricsFullscreenOpen] = useState(false);
+  const [isLibraryDrawerOpen, setIsLibraryDrawerOpen] = useState(false);
   const [downloadingIds, setDownloadingIds] = useState<Set<string>>(() => new Set());
   const [isDragActive, setIsDragActive] = useState(false);
   const [playbackMode, setPlaybackMode] = useState<PlaybackMode>(restorePlaybackMode);
@@ -320,6 +300,11 @@ export function App() {
   const currentTrack = tracks.find((track) => track.id === currentTrackId) ?? tracks[0];
   const canRemoveCurrentLocalTrack = currentTrack.source === 'local' && Boolean(currentTrack.filePath || currentTrack.audioUrl);
   const canRevealCurrentLocalTrack = Boolean(currentTrack.filePath && window.teaMusicBackend?.revealLocalAudioFile);
+  const coverTheme = useDominantTheme(currentTrack.coverUrl);
+  const shellStyle = {
+    ...coverTheme,
+    ...(currentTrack.coverUrl ? { '--app-cover': `url("${currentTrack.coverUrl}")` } : {}),
+  } as CSSProperties;
 
   useEffect(() => {
     let isMounted = true;
@@ -783,8 +768,9 @@ export function App() {
       }
 
       if (event.key === 'Escape') {
-        if (isLyricsFullscreenOpen || isTrackMenuOpen || isVolumeOpen || isSearchOpen || isFinderOpen) {
+        if (isLibraryDrawerOpen || isLyricsFullscreenOpen || isTrackMenuOpen || isVolumeOpen || isSearchOpen || isFinderOpen) {
           event.preventDefault();
+          setIsLibraryDrawerOpen(false);
           setIsLyricsFullscreenOpen(false);
           setIsTrackMenuOpen(false);
           setIsVolumeOpen(false);
@@ -871,12 +857,87 @@ export function App() {
     setPlaybackMode((mode) => (mode === 'queue' ? 'repeat-one' : mode === 'repeat-one' ? 'shuffle' : 'queue'));
   }
 
-  const ModeIcon = playbackMode === 'queue' ? Repeat : playbackMode === 'repeat-one' ? Repeat1 : Shuffle;
+  const currentTrackMenu = isTrackMenuOpen ? (
+    <>
+      <div
+        aria-hidden="true"
+        className="menu-scrim"
+        onClick={() => {
+          setIsTrackMenuOpen(false);
+          setIsVolumeOpen(false);
+        }}
+      />
+      <div className="track-menu glass-panel" role="menu">
+        <button
+          onClick={() => {
+            setIsSearchOpen(true);
+            setIsTrackMenuOpen(false);
+          }}
+        >
+          搜索
+        </button>
+        <button
+          onClick={() => {
+            void handleLocalImportClick();
+            setIsTrackMenuOpen(false);
+          }}
+        >
+          导入本地音乐
+        </button>
+        <button
+          onClick={() => {
+            setIsFinderOpen(true);
+            setIsTrackMenuOpen(false);
+          }}
+        >
+          在线找歌
+        </button>
+        <button aria-label="音量" onClick={() => setIsVolumeOpen((open) => !open)}>
+          音量
+        </button>
+        {isVolumeOpen ? (
+          <div className="volume-pop glass-panel">
+            <input
+              aria-label="音量大小"
+              className="volume-vertical"
+              type="range"
+              min="0"
+              max="100"
+              value={volume}
+              onChange={(event) => handleVolumeChange(Number(event.target.value))}
+            />
+          </div>
+        ) : null}
+        {canRemoveCurrentLocalTrack ? (
+          <button
+            aria-label="移出本地音乐"
+            onClick={() => {
+              void removeCurrentLocalTrack();
+              setIsTrackMenuOpen(false);
+            }}
+          >
+            移出本地音乐
+          </button>
+        ) : null}
+        {canRevealCurrentLocalTrack ? (
+          <button
+            aria-label="在访达中显示"
+            onClick={() => {
+              void revealCurrentLocalTrack();
+              setIsTrackMenuOpen(false);
+            }}
+          >
+            在访达中显示
+          </button>
+        ) : null}
+      </div>
+    </>
+  ) : null;
 
   return (
     <div
       className={isDragActive ? 'app-shell dragging-local' : 'app-shell'}
-      style={currentTrack.coverUrl ? ({ '--app-cover': `url("${currentTrack.coverUrl}")` } as CSSProperties) : undefined}
+      style={shellStyle}
       onDragLeave={() => setIsDragActive(false)}
       onDragOver={(event) => {
         event.preventDefault();
@@ -921,160 +982,46 @@ export function App() {
       ) : null}
 
       <main className="content">
-        <div className="track-list" aria-label="歌曲列表">
-          {filteredTracks.map((track) => {
-            const badge = getTrackBadge(track);
-
-            return (
-              <button
-                className={track.id === currentTrack?.id ? 'track-row active' : 'track-row'}
-                key={track.id}
-                onClick={() => selectTrack(track)}
-                onDoubleClick={() => selectTrack(track, { keepPlaying: true })}
-              >
-                {track.id === currentTrack?.id && isPlaying ? (
-                  <span aria-hidden="true" className="playing-bars">
-                    <i />
-                    <i />
-                    <i />
-                  </span>
-                ) : (
-                  <span aria-hidden="true" className="track-bullet" />
-                )}
-                <div>
-                  <strong>{track.title}</strong>
-                  <span>{getTrackSubtitle(track)}</span>
-                </div>
-                {badge ? <em>{badge}</em> : null}
-              </button>
-            );
-          })}
-          {filteredTracks.length === 0 ? (
-            <div className="empty-state">
-              <Music2 size={18} />
-              <span>{query.trim() ? '没有匹配的歌曲' : '还没有歌曲'}</span>
-            </div>
-          ) : null}
-        </div>
-      </main>
-
-      <footer className="player-bar glass-panel">
-        <section className="now-playing" aria-label="当前播放">
-          <div className="now-playing-meta">
-            <h2>{currentTrack.title}</h2>
-            <span>
-              {getTrackSubtitle(currentTrack)}
-              {getTrackBadge(currentTrack) ? ` · ${getTrackBadge(currentTrack)}` : ''}
-            </span>
-          </div>
-          <button
-            aria-label={currentTrack.liked ? '取消喜欢当前歌曲' : '喜欢当前歌曲'}
-            className={currentTrack.liked ? 'mini-like active' : 'mini-like'}
-            onClick={toggleCurrentTrackLike}
-          >
-            <Heart size={18} fill={currentTrack.liked ? 'currentColor' : 'none'} />
-          </button>
-        </section>
-
-        <LyricStage
+        <ImmersivePlayer
+          currentTrack={currentTrack}
           currentTime={playbackTime.current}
           duration={playbackTime.duration}
-          lyrics={currentTrack.lyrics ?? []}
-          mode="compact"
-          onOpenFullscreen={() => setIsLyricsFullscreenOpen(true)}
+          isPlaying={isPlaying}
+          playbackMode={playbackMode}
+          onTogglePlayback={() => void togglePlayback()}
+          onPrevious={() => moveInQueue('previous')}
+          onNext={skipToNextTrack}
+          onCyclePlaybackMode={cyclePlaybackMode}
+          onSeek={handleSeekChange}
+          onToggleLike={toggleCurrentTrackLike}
+          onOpenLibrary={() => setIsLibraryDrawerOpen(true)}
+          onOpenSearch={() => setIsSearchOpen(true)}
+          onOpenLyrics={() => setIsLyricsFullscreenOpen(true)}
+          onToggleMenu={() => setIsTrackMenuOpen((open) => !open)}
+          isMenuOpen={isTrackMenuOpen}
+          menu={currentTrackMenu}
         />
+      </main>
 
-        <div className="progress-area">
-          <span>{formatPlaybackTime(playbackTime.current)}</span>
-          <input
-            aria-label="播放进度"
-            className="progress-slider"
-            max={playbackTime.duration}
-            min="0"
-            type="range"
-            value={Math.floor(playbackTime.current)}
-            onChange={(event) => handleSeekChange(Number(event.target.value))}
-          />
-          <span>{formatPlaybackTime(playbackTime.duration)}</span>
-        </div>
-
-        <div className="transport">
-          <button
-            aria-label={`播放模式：${playbackModeCopy[playbackMode]}`}
-            className={playbackMode === 'queue' ? '' : 'mode-active'}
-            onClick={cyclePlaybackMode}
-          >
-            <ModeIcon size={18} />
-          </button>
-          <button aria-label="上一首" onClick={() => moveInQueue('previous')}>
-            <SkipBack size={18} fill="currentColor" />
-          </button>
-          <button className="play-button" aria-label={isPlaying ? '暂停' : '播放'} onClick={togglePlayback}>
-            {isPlaying ? <Pause size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" />}
-          </button>
-          <button aria-label="下一首" onClick={skipToNextTrack}>
-            <SkipForward size={18} fill="currentColor" />
-          </button>
-
-          <div className="volume-control">
-            <button
-              aria-label="音量"
-              className={isVolumeOpen ? 'volume-btn active' : 'volume-btn'}
-              onClick={() => setIsVolumeOpen((open) => !open)}
-            >
-              {volume > 0 ? <Volume2 size={18} /> : <VolumeX size={18} />}
-            </button>
-            {isVolumeOpen ? (
-              <>
-                <div aria-hidden="true" className="menu-scrim" onClick={() => setIsVolumeOpen(false)} />
-                <div className="volume-pop glass-panel">
-                  <input
-                    aria-label="音量大小"
-                    className="volume-vertical"
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={volume}
-                    onChange={(event) => handleVolumeChange(Number(event.target.value))}
-                  />
-                </div>
-              </>
-            ) : null}
-          </div>
-
-          <button
-            aria-label="更多操作"
-            className={isTrackMenuOpen ? 'track-menu-btn active' : 'track-menu-btn'}
-            onClick={() => setIsTrackMenuOpen((open) => !open)}
-          >
-            <MoreHorizontal size={18} />
-          </button>
-          {isTrackMenuOpen ? (
-            <>
-              <div aria-hidden="true" className="menu-scrim" onClick={() => setIsTrackMenuOpen(false)} />
-              <div className="track-menu glass-panel" role="menu">
-                <button onClick={() => { setIsSearchOpen(true); setIsTrackMenuOpen(false); }}>搜索</button>
-                <button onClick={() => { void handleLocalImportClick(); setIsTrackMenuOpen(false); }}>导入本地音乐</button>
-                <button onClick={() => { setIsFinderOpen(true); setIsTrackMenuOpen(false); }}>在线找歌</button>
-                {canRemoveCurrentLocalTrack ? (
-                  <button aria-label="移出本地音乐" onClick={() => { void removeCurrentLocalTrack(); setIsTrackMenuOpen(false); }}>移出本地音乐</button>
-                ) : null}
-                {canRevealCurrentLocalTrack ? (
-                  <button aria-label="在访达中显示" onClick={() => { void revealCurrentLocalTrack(); setIsTrackMenuOpen(false); }}>在访达中显示</button>
-                ) : null}
-              </div>
-            </>
-          ) : null}
-        </div>
-        <audio
-          ref={audioRef}
-          src={currentTrack.audioUrl}
-          onEnded={handleAudioEnded}
-          onLoadedMetadata={handleLoadedMetadata}
-          onTimeUpdate={handleTimeUpdate}
+      {isLibraryDrawerOpen ? (
+        <LibraryDrawer
+          tracks={filteredTracks}
+          currentTrackId={currentTrackId}
+          isPlaying={isPlaying}
+          query={query}
+          onQueryChange={setQuery}
+          onClose={() => setIsLibraryDrawerOpen(false)}
+          onSelectTrack={selectTrack}
         />
-      </footer>
+      ) : null}
 
+      <audio
+        ref={audioRef}
+        src={currentTrack.audioUrl}
+        onEnded={handleAudioEnded}
+        onLoadedMetadata={handleLoadedMetadata}
+        onTimeUpdate={handleTimeUpdate}
+      />
       {isLyricsFullscreenOpen ? (
         <div className="lyrics-fullscreen" role="dialog" aria-label="全屏歌词">
           <button aria-label="关闭全屏歌词" className="lyrics-close" onClick={() => setIsLyricsFullscreenOpen(false)}>
@@ -1136,7 +1083,7 @@ export function App() {
                 </li>
               ))}
             </ul>
-            {finderLoading ? <p className="finder-hint">搜索中…</p> : null}
+            {finderLoading ? <p className="finder-hint">搜索中...</p> : null}
           </div>
         </div>
       ) : null}
