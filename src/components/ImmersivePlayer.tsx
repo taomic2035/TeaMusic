@@ -70,7 +70,7 @@ export function ImmersivePlayer({
   const badge = getTrackBadge(currentTrack);
 
   return (
-    <section className="immersive-player" aria-label="沉浸播放页">
+    <section className={isPlaying ? 'immersive-player is-playing' : 'immersive-player is-idle'} aria-label="沉浸播放页">
       <div className="immersive-top">
         <button aria-label="打开歌曲列表" onClick={onOpenLibrary}>
           <ListMusic size={18} />

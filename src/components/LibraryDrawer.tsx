@@ -1,4 +1,4 @@
-import { Search, X } from 'lucide-react';
+import { Music2, Search, X } from 'lucide-react';
 import { Track, getTrackBadge } from '../domain/music';
 
 interface LibraryDrawerProps {
@@ -46,6 +46,12 @@ export function LibraryDrawer({
         </label>
 
         <div className="track-list drawer-list">
+          {tracks.length === 0 ? (
+            <div className="empty-state drawer-empty">
+              <Music2 size={18} />
+              <span>{query.trim() ? '没有匹配的歌曲' : '还没有歌曲'}</span>
+            </div>
+          ) : null}
           {tracks.map((track) => {
             const badge = getTrackBadge(track);
 

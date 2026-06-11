@@ -53,6 +53,26 @@ describe('App shell', () => {
     expect(screen.queryByLabelText('睡眠定时：关闭')).not.toBeInTheDocument();
   });
 
+  it('marks the immersive screen while audio is playing for cover motion styling', () => {
+    render(<App />);
+
+    expect(screen.getByLabelText('沉浸播放页')).toHaveClass('is-idle');
+
+    fireEvent.click(screen.getByLabelText('播放'));
+
+    expect(screen.getByLabelText('沉浸播放页')).toHaveClass('is-playing');
+  });
+
+  it('shows an empty state inside the library drawer when filtering has no matches', () => {
+    render(<App />);
+
+    const library = openLibrary();
+    const search = within(library).getByPlaceholderText('搜索歌曲、歌手');
+    fireEvent.change(search, { target: { value: '完全不存在的歌' } });
+
+    expect(within(library).getByText('没有匹配的歌曲')).toBeInTheDocument();
+  });
+
   it('adds local audio to the unified library with a special badge', () => {
     render(<App />);
 
