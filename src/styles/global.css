@@ -44,9 +44,11 @@ button {
 .content,
 .search-bar,
 .finder-overlay,
+.finder-panel,
+.menu-scrim,
 .track-menu,
-.lib-menu,
-.volume-pop {
+.library-drawer,
+.lib-menu {
   -webkit-app-region: no-drag;
 }
 
@@ -398,15 +400,16 @@ button {
 
 .library-drawer {
   position: absolute;
-  right: 10px;
-  bottom: 10px;
-  left: 10px;
+  right: 12px;
+  bottom: 12px;
+  left: 12px;
   z-index: 59;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
-  max-height: min(72vh, 620px);
-  padding: 12px;
-  border-radius: 22px;
+  max-height: min(78vh, 660px);
+  padding: 14px;
+  border-radius: 24px;
+  background: rgba(14, 17, 17, 0.7);
   animation: drawer-rise 0.24s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -418,7 +421,14 @@ button {
 
 .library-drawer-head {
   justify-content: space-between;
-  padding: 2px 4px 10px;
+  gap: 12px;
+  padding: 2px 4px 12px;
+}
+
+.library-drawer-head strong {
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 760;
 }
 
 .library-drawer-actions {
@@ -449,14 +459,15 @@ button {
   color: rgba(255, 255, 255, 0.9);
   font-size: 12px;
   font-weight: 720;
+  white-space: nowrap;
 }
 
 .drawer-search {
   gap: 8px;
-  min-height: 38px;
+  min-height: 40px;
   padding: 0 12px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.08);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.075);
 }
 
 .drawer-search input {
@@ -1178,37 +1189,154 @@ button.mini-download:hover {
   color: #ff6b8b;
 }
 
-.track-menu-scrim {
+.menu-scrim {
   position: fixed;
   inset: 0;
-  z-index: 49;
+  z-index: 61;
+  background: rgba(2, 4, 7, 0.22);
+  animation: queue-fade 0.16s ease;
 }
 
 .track-menu {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + 12px);
-  z-index: 50;
+  position: fixed;
+  left: 50%;
+  bottom: 88px;
+  z-index: 62;
+  display: grid;
+  gap: 10px;
+  width: min(354px, calc(100vw - 28px));
+  padding: 13px;
+  border-radius: 20px;
+  background: rgba(14, 17, 17, 0.72);
+  box-shadow: 0 26px 80px rgba(0, 0, 0, 0.42);
+  transform: translateX(-50%);
+  animation: settings-rise 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes settings-rise {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+.track-menu-head {
+  display: grid;
+  gap: 3px;
+  padding: 2px 2px 0;
+}
+
+.track-menu-head span {
   display: flex;
-  flex-direction: column;
-  min-width: 180px;
-  padding: 6px;
-  border-radius: 12px;
+  align-items: center;
+  gap: 7px;
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 14px;
+  font-weight: 740;
 }
 
-.track-menu button {
-  padding: 9px 12px;
+.track-menu-head small {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track-menu-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.track-menu-action,
+.track-menu-wide {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 42px;
   border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.82);
-  text-align: left;
-  font-size: 13px;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.075);
+  color: rgba(255, 255, 255, 0.84);
   cursor: pointer;
+  font-size: 12px;
+  font-weight: 680;
+  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease;
 }
 
-.track-menu button:hover {
-  background: rgba(255, 255, 255, 0.1);
+.track-menu-action span,
+.track-menu-wide span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track-menu-action:hover,
+.track-menu-wide:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.track-menu-wide {
+  justify-content: flex-start;
+  padding: 0 12px;
+}
+
+.track-menu-wide.danger {
+  color: rgba(255, 196, 208, 0.9);
+}
+
+.menu-volume-panel {
+  display: grid;
+  gap: 10px;
+  padding: 11px 12px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.052);
+}
+
+.menu-volume-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 12px;
+}
+
+.menu-volume-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: default;
+  font-size: 12px;
+}
+
+.menu-volume-head strong {
+  min-width: 28px;
+  color: rgba(255, 255, 255, 0.92);
+  text-align: right;
+  font-size: 12px;
+}
+
+.menu-volume-panel input {
+  width: 100%;
+  height: 4px;
+  margin: 0;
+  accent-color: var(--theme-accent, #7bffb4);
 }
 
 .volume-control {
@@ -1234,54 +1362,6 @@ button.mini-download:hover {
 .volume-btn.active {
   color: #fff;
   background: rgba(255, 255, 255, 0.1);
-}
-
-.volume-pop {
-  position: absolute;
-  bottom: calc(100% + 12px);
-  left: 50%;
-  z-index: 50;
-  transform: translateX(-50%);
-  display: grid;
-  place-items: center;
-  padding: 14px 10px;
-  border-radius: 14px;
-}
-
-.volume-vertical {
-  width: 6px;
-  height: 110px;
-  margin: 0;
-  writing-mode: vertical-lr;
-  direction: rtl;
-  accent-color: #fff;
-  cursor: pointer;
-}
-
-.menu-volume {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-}
-
-.menu-volume button {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.78);
-  cursor: pointer;
-}
-
-.menu-volume input {
-  flex: 1;
-  height: 4px;
-  margin: 0;
-  accent-color: #fff;
 }
 
 .transport {
@@ -1513,18 +1593,20 @@ button.mini-download:hover {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  width: min(460px, 92vw);
-  max-height: 72vh;
+  width: min(486px, 92vw);
+  max-height: min(82vh, 650px);
   padding: 18px;
-  border-radius: 18px;
+  border-radius: 24px;
+  background: rgba(14, 17, 17, 0.74);
 }
 
 .finder-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   font-size: 15px;
-  font-weight: 640;
+  font-weight: 760;
 }
 
 .finder-head button {
@@ -1547,9 +1629,10 @@ button.mini-download:hover {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 9px 12px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.06);
+  min-height: 42px;
+  padding: 0 12px;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.075);
   color: rgba(255, 255, 255, 0.78);
 }
 
@@ -1568,6 +1651,7 @@ button.mini-download:hover {
   flex-direction: column;
   margin: 0;
   padding: 0;
+  min-height: 0;
   overflow-y: auto;
   list-style: none;
   scrollbar-width: none;
@@ -1635,7 +1719,7 @@ button.mini-download:hover {
   gap: 4px;
   padding: 10px 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
+  border-radius: 14px;
   background: rgba(255, 255, 255, 0.045);
   color: rgba(255, 255, 255, 0.58);
   font-size: 11px;

@@ -18,6 +18,7 @@ function createWindow() {
     minHeight: 620,
     backgroundColor: '#101114',
     frame: false,
+    icon: path.join(__dirname, '..', 'assets', 'brand', 'teamusic-icon.png'),
     vibrancy: process.platform === 'darwin' ? 'under-window' : undefined,
     visualEffectState: 'active',
     webPreferences: {

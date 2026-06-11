@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -10,6 +10,11 @@ describe('Electron main window', () => {
     const minWidth = Number(mainSource.match(/minWidth:\s*(\d+)/)?.[1]);
 
     expect(minWidth).toBeLessThanOrEqual(760);
+  });
+
+  it('uses the TeaMusic brand icon for the desktop window', () => {
+    expect(mainSource).toContain('teamusic-icon.png');
+    expect(existsSync(join(process.cwd(), 'assets', 'brand', 'teamusic-icon.png'))).toBe(true);
   });
 
   it('removes local music from the app library without deleting audio files', () => {

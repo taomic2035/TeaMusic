@@ -1,6 +1,11 @@
 import {
   Download,
+  FolderOpen,
+  SlidersHorizontal,
   Search,
+  Trash2,
+  Upload,
+  Volume2,
   X,
 } from 'lucide-react';
 import { ChangeEvent, CSSProperties, DragEvent, useEffect, useMemo, useRef, useState } from 'react';
@@ -287,7 +292,6 @@ export function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isTrackMenuOpen, setIsTrackMenuOpen] = useState(false);
-  const [isVolumeOpen, setIsVolumeOpen] = useState(false);
   const [isLyricsFullscreenOpen, setIsLyricsFullscreenOpen] = useState(false);
   const [isLibraryDrawerOpen, setIsLibraryDrawerOpen] = useState(false);
   const [downloadingIds, setDownloadingIds] = useState<Set<string>>(() => new Set());
@@ -800,12 +804,11 @@ export function App() {
       }
 
       if (event.key === 'Escape') {
-        if (isLibraryDrawerOpen || isLyricsFullscreenOpen || isTrackMenuOpen || isVolumeOpen || isSearchOpen || isFinderOpen) {
+        if (isLibraryDrawerOpen || isLyricsFullscreenOpen || isTrackMenuOpen || isSearchOpen || isFinderOpen) {
           event.preventDefault();
           setIsLibraryDrawerOpen(false);
           setIsLyricsFullscreenOpen(false);
           setIsTrackMenuOpen(false);
-          setIsVolumeOpen(false);
           setIsSearchOpen(false);
           setIsFinderOpen(false);
         }
@@ -896,72 +899,91 @@ export function App() {
         className="menu-scrim"
         onClick={() => {
           setIsTrackMenuOpen(false);
-          setIsVolumeOpen(false);
         }}
       />
-      <div className="track-menu glass-panel" role="menu">
-        <button
-          onClick={() => {
-            setIsSearchOpen(true);
-            setIsTrackMenuOpen(false);
-          }}
-        >
-          搜索
-        </button>
-        <button
-          onClick={() => {
-            void handleLocalImportClick();
-            setIsTrackMenuOpen(false);
-          }}
-        >
-          导入本地音乐
-        </button>
-        <button
-          onClick={() => {
-            setIsFinderOpen(true);
-            setIsTrackMenuOpen(false);
-          }}
-        >
-          在线找歌
-        </button>
-        <button aria-label="音量" onClick={() => setIsVolumeOpen((open) => !open)}>
-          音量
-        </button>
-        {isVolumeOpen ? (
-          <div className="volume-pop glass-panel">
-            <input
-              aria-label="音量大小"
-              className="volume-vertical"
-              type="range"
-              min="0"
-              max="100"
-              value={volume}
-              onChange={(event) => handleVolumeChange(Number(event.target.value))}
-            />
-          </div>
-        ) : null}
+      <div className="track-menu glass-panel" role="menu" aria-label="播放设置">
+        <div className="track-menu-head">
+          <span>
+            <SlidersHorizontal size={15} />
+            播放设置
+          </span>
+          <small>{currentTrack.title}</small>
+        </div>
+        <div className="track-menu-actions">
+          <button
+            className="track-menu-action"
+            onClick={() => {
+              setIsSearchOpen(true);
+              setIsTrackMenuOpen(false);
+            }}
+          >
+            <Search size={16} />
+            <span>搜索</span>
+          </button>
+          <button
+            className="track-menu-action"
+            onClick={() => {
+              void handleLocalImportClick();
+              setIsTrackMenuOpen(false);
+            }}
+          >
+            <Upload size={16} />
+            <span>导入本地音乐</span>
+          </button>
+          <button
+            className="track-menu-action"
+            onClick={() => {
+              setIsFinderOpen(true);
+              setIsTrackMenuOpen(false);
+            }}
+          >
+            <Download size={16} />
+            <span>在线找歌</span>
+          </button>
+        </div>
         {canRemoveCurrentLocalTrack ? (
           <button
+            className="track-menu-wide danger"
             aria-label="移出本地音乐"
             onClick={() => {
               void removeCurrentLocalTrack();
               setIsTrackMenuOpen(false);
             }}
           >
-            移出本地音乐
+            <Trash2 size={16} />
+            <span>移出本地音乐</span>
           </button>
         ) : null}
         {canRevealCurrentLocalTrack ? (
           <button
+            className="track-menu-wide"
             aria-label="在访达中显示"
             onClick={() => {
               void revealCurrentLocalTrack();
               setIsTrackMenuOpen(false);
             }}
           >
-            在访达中显示
+            <FolderOpen size={16} />
+            <span>在访达中显示</span>
           </button>
         ) : null}
+        <div className="menu-volume-panel">
+          <div className="menu-volume-head">
+            <button type="button" aria-label="音量" className="menu-volume-label">
+              <Volume2 size={16} />
+              音量
+            </button>
+            <strong>{volume}</strong>
+          </div>
+          <input
+            aria-label="音量大小"
+            type="range"
+            min="0"
+            max="100"
+            value={volume}
+            onChange={(event) => handleVolumeChange(Number(event.target.value))}
+          />
+        </div>
       </div>
     </>
   ) : null;

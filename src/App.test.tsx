@@ -272,6 +272,16 @@ describe('App shell', () => {
     expect(screen.getByLabelText('关闭全屏歌词')).toBeInTheDocument();
   });
 
+  it('keeps volume inside the settings menu instead of a nested popover', () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByLabelText('更多操作'));
+
+    const menu = screen.getByRole('menu', { name: '播放设置' });
+    expect(within(menu).getByLabelText('音量大小')).toBeInTheDocument();
+    expect(document.querySelector('.volume-pop')).not.toBeInTheDocument();
+  });
+
   it('opens the hidden finder and downloads an online track into the library', async () => {
     const downloadOnline = vi.fn(async () => ({
       filePath: 'D:/Music/TeaMusic/Resolved/周杰伦/晴天-周杰伦.mp3',
