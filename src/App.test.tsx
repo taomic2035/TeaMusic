@@ -320,7 +320,7 @@ describe('App shell', () => {
     delete window.teaMusicBackend;
   });
 
-  it('opens verification and resumes online search when the source blocks search', async () => {
+  it('opens verification, resumes online search and downloads the best ranked match', async () => {
     const searchOnline = vi
       .fn()
       .mockResolvedValueOnce({
@@ -328,14 +328,23 @@ describe('App shell', () => {
         code: 'VERIFY_REQUIRED' as const,
         verifyUrl: 'https://www.fangpi.net/s/%E6%99%B4%E5%A4%A9',
       })
-      .mockResolvedValueOnce([{ id: '402856', title: '晴天', artist: '周杰伦' }]);
+      .mockResolvedValueOnce([
+        { id: '100', title: '晴天娃娃', artist: '江语晨' },
+        { id: '402856', title: '晴天', artist: '周杰伦' },
+        { id: '101', title: '晴天', artist: '五月天' },
+      ]);
+    const downloadOnline = vi.fn(async () => ({
+      filePath: 'D:/Music/TeaMusic/Archive/周杰伦/晴天 - 周杰伦.mp3',
+      title: '晴天',
+      artist: '周杰伦',
+    }));
     const openVerificationPage = vi.fn(async () => true);
     window.teaMusicBackend = {
       scanResolvedLibrary: async () => [],
       scanLocalLibrary: async () => [],
       chooseLocalAudioFiles: async () => [],
       searchOnline,
-      downloadOnline: async () => ({ error: 'unused' }),
+      downloadOnline,
       openVerificationPage,
     };
 
@@ -352,7 +361,12 @@ describe('App shell', () => {
     await waitFor(() => {
       expect(searchOnline).toHaveBeenCalledTimes(2);
     });
-    expect(screen.getByText('晴天')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(downloadOnline).toHaveBeenCalledWith('402856');
+    });
+    await waitFor(() => {
+      expect(within(getLibrary()).getByRole('button', { name: /晴天/ })).toBeInTheDocument();
+    });
 
     delete window.teaMusicBackend;
   });

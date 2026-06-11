@@ -278,6 +278,51 @@ function mergeTracksById(nextTracks: Track[], existingTracks: Track[]): Track[] 
   return [...nextTracks.filter((track) => !existingIds.has(track.id)), ...existingTracks];
 }
 
+function normalizeMatchText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function scoreFinderSong(song: FinderSong, query: string): number {
+  const title = normalizeMatchText(song.title);
+  const artist = normalizeMatchText(song.artist);
+  const normalizedQuery = normalizeMatchText(query);
+  const tokens = normalizedQuery.split(' ').filter(Boolean);
+  const combined = `${title} ${artist}`.trim();
+  let score = 0;
+
+  if (!normalizedQuery) {
+    return score;
+  }
+
+  if (combined === normalizedQuery) score += 260;
+  if (title === normalizedQuery) score += 180;
+  if (artist === normalizedQuery) score += 80;
+
+  tokens.forEach((token) => {
+    if (title === token) score += 90;
+    else if (title.includes(token)) score += 45;
+
+    if (artist === token) score += 75;
+    else if (artist.includes(token)) score += 35;
+
+    if (combined.includes(token)) score += 10;
+  });
+
+  return score;
+}
+
+function chooseBestFinderSong(songs: FinderSong[], query: string): FinderSong | null {
+  return (
+    songs
+      .map((song, index) => ({ song, index, score: scoreFinderSong(song, query) }))
+      .sort((left, right) => right.score - left.score || left.index - right.index)[0]?.song ?? null
+  );
+}
+
 export function App() {
   const [tracks, setTracks] = useState(() => restorePersistedTrackState(initialTracks));
   const [query, setQuery] = useState('');
@@ -604,6 +649,16 @@ export function App() {
       }
 
       setFinderResults(results);
+
+      if (hasRetriedVerification) {
+        const bestMatch = chooseBestFinderSong(results, trimmedQuery);
+
+        if (bestMatch) {
+          setFinderError(`已匹配 ${bestMatch.title} - ${bestMatch.artist}，正在下载...`);
+          await downloadFromFinder(bestMatch);
+          return;
+        }
+      }
 
       if (results.length === 0) {
         setFinderError('没找到，换个关键词试试');
