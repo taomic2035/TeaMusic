@@ -66,6 +66,17 @@ describe('fangpi-source orchestration (injected http)', () => {
     await expect(fangpi.resolvePlayUrl('1', deps)).rejects.toThrow('付费');
   });
 
+  it('resolvePlayUrl returns a verification URL when the source asks for a human check', async () => {
+    const page =
+      'window.appData = JSON.parse(\'{\\"mp3_title\\":\\"x\\",\\"mp3_author\\":\\"y\\",\\"play_id\\":\\"p\\",\\"mp3_type\\":0,\\"should_verify\\":true}\');';
+    const deps = { httpGet: async () => page, httpPost: async () => '', downloadBinary: async () => {} };
+
+    await expect(fangpi.resolvePlayUrl('402856', deps)).rejects.toMatchObject({
+      code: 'VERIFY_REQUIRED',
+      verifyUrl: 'https://www.fangpi.net/music/402856',
+    });
+  });
+
   it('downloadSong writes file via injected downloadBinary', async () => {
     const os = require('node:os');
     const fsm = require('node:fs');

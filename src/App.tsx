@@ -21,6 +21,11 @@ import {
 import { useDominantTheme } from './hooks/useDominantTheme';
 
 type PlaybackMode = 'queue' | 'repeat-one' | 'shuffle';
+type FinderVerification = {
+  songId: string;
+  title: string;
+  verifyUrl: string;
+};
 
 const mediaSessionActions = ['play', 'pause', 'previoustrack', 'nexttrack'] satisfies MediaSessionAction[];
 
@@ -274,6 +279,7 @@ export function App() {
   const [finderResults, setFinderResults] = useState<Array<{ id: string; title: string; artist: string }>>([]);
   const [finderLoading, setFinderLoading] = useState(false);
   const [finderError, setFinderError] = useState('');
+  const [finderVerification, setFinderVerification] = useState<FinderVerification | null>(null);
   const [currentTrackId, setCurrentTrackId] = useState(() => restoreCurrentTrackId(initialTracks));
   const [hasCompletedLibraryRestore, setHasCompletedLibraryRestore] = useState(
     () => typeof window === 'undefined' || !window.teaMusicBackend,
@@ -550,12 +556,19 @@ export function App() {
     const trimmedQuery = finderQuery.trim();
     const backend = window.teaMusicBackend;
 
-    if (!trimmedQuery || !backend?.searchOnline) {
+    if (!trimmedQuery) {
+      return;
+    }
+
+    if (!backend?.searchOnline) {
+      setFinderError('在线找歌需要在桌面端窗口使用');
+      setFinderVerification(null);
       return;
     }
 
     setFinderLoading(true);
     setFinderError('');
+    setFinderVerification(null);
 
     try {
       const results = await backend.searchOnline(trimmedQuery);
@@ -580,6 +593,7 @@ export function App() {
 
     setDownloadingIds((ids) => new Set(ids).add(song.id));
     setFinderError('');
+    setFinderVerification(null);
 
     try {
       const result = await backend.downloadOnline(song.id);
@@ -588,6 +602,9 @@ export function App() {
         const downloadedTrack = createResolvedTrackFromPath(result.filePath, new Date().toISOString());
         setTracks((existingTracks) => mergeTracksById([downloadedTrack], existingTracks));
         setFinderResults((rows) => rows.filter((row) => row.id !== song.id));
+      } else if (result?.code === 'VERIFY_REQUIRED' && result.verifyUrl) {
+        setFinderVerification({ songId: song.id, title: song.title, verifyUrl: result.verifyUrl });
+        setFinderError(result.error || '需要真人检测，打开验证页面后再重试下载');
       } else {
         setFinderError(result?.error || '这首暂时下不了，换一首');
       }
@@ -599,6 +616,21 @@ export function App() {
         next.delete(song.id);
         return next;
       });
+    }
+  }
+
+  async function openFinderVerification() {
+    const backend = window.teaMusicBackend;
+
+    if (!finderVerification?.verifyUrl || !backend?.openExternalUrl) {
+      setFinderError('无法打开验证页面，请稍后再试');
+      return;
+    }
+
+    const opened = await backend.openExternalUrl(finderVerification.verifyUrl);
+
+    if (!opened) {
+      setFinderError('无法打开验证页面，请稍后再试');
     }
   }
 
@@ -1068,6 +1100,31 @@ export function App() {
               />
             </label>
             {finderError ? <p className="finder-hint">{finderError}</p> : null}
+            {finderVerification ? (
+              <div className="finder-verification">
+                <button type="button" onClick={() => void openFinderVerification()}>
+                  打开验证页面
+                </button>
+                <button
+                  type="button"
+                  aria-label={`重试下载 ${finderVerification.title}`}
+                  onClick={() => {
+                    const retrySong = finderResults.find((row) => row.id === finderVerification.songId);
+
+                    if (retrySong) {
+                      void downloadFromFinder(retrySong);
+                    }
+                  }}
+                >
+                  重试下载
+                </button>
+              </div>
+            ) : null}
+            <div className="finder-source-note" aria-label="素材来源说明">
+              <span>封面：同名图片、cover 或 folder</span>
+              <span>歌词：同名 .lrc</span>
+              <span>下载：在线搜索后保存到系统音乐目录</span>
+            </div>
             <ul className="finder-list">
               {finderResults.map((song) => (
                 <li key={song.id}>

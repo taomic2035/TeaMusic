@@ -310,6 +310,59 @@ describe('App shell', () => {
     delete window.teaMusicBackend;
   });
 
+  it('lets the user open a verification page and retry a protected online download', async () => {
+    const downloadOnline = vi.fn(async () => ({
+      error: '需要真人检测，验证后再重试下载',
+      code: 'VERIFY_REQUIRED' as const,
+      verifyUrl: 'https://www.fangpi.net/music/402856',
+    }));
+    const openExternalUrl = vi.fn(async () => true);
+    window.teaMusicBackend = {
+      scanResolvedLibrary: async () => [],
+      scanLocalLibrary: async () => [],
+      chooseLocalAudioFiles: async () => [],
+      searchOnline: async () => [{ id: '402856', title: '晴天', artist: '周杰伦' }],
+      downloadOnline,
+      openExternalUrl,
+    };
+
+    render(<App />);
+    fireEvent.click(screen.getByLabelText('更多操作'));
+    fireEvent.click(screen.getByText('在线找歌'));
+    const finderInput = screen.getByPlaceholderText('歌名或歌手，回车搜索');
+    fireEvent.change(finderInput, { target: { value: '晴天' } });
+    fireEvent.keyDown(finderInput, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(screen.getByText('晴天')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByLabelText('下载'));
+
+    await waitFor(() => {
+      expect(screen.getByText(/需要真人检测/)).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: '打开验证页面' }));
+
+    expect(openExternalUrl).toHaveBeenCalledWith('https://www.fangpi.net/music/402856');
+    expect(screen.getByRole('button', { name: '重试下载 晴天' })).toBeInTheDocument();
+
+    delete window.teaMusicBackend;
+  });
+
+  it('explains that online search needs the desktop runtime when previewed in a browser', async () => {
+    delete window.teaMusicBackend;
+
+    render(<App />);
+    fireEvent.click(screen.getByLabelText('更多操作'));
+    fireEvent.click(screen.getByText('在线找歌'));
+    const finderInput = screen.getByPlaceholderText('歌名或歌手，回车搜索');
+    fireEvent.change(finderInput, { target: { value: '晴天' } });
+    fireEvent.keyDown(finderInput, { key: 'Enter' });
+
+    expect(screen.getByText('在线找歌需要在桌面端窗口使用')).toBeInTheDocument();
+  });
+
   it('never downloads from the main library search box', async () => {
     const downloadOnline = vi.fn();
     const searchOnline = vi.fn(async () => []);

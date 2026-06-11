@@ -10,6 +10,15 @@ const BASE = 'https://www.fangpi.net';
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 const TIMEOUT = 50000;
 
+class VerificationRequiredError extends Error {
+  constructor(musicId) {
+    super('需要真人检测，打开验证页面后再重试下载');
+    this.name = 'VerificationRequiredError';
+    this.code = 'VERIFY_REQUIRED';
+    this.verifyUrl = `${BASE}/music/${encodeURIComponent(String(musicId))}`;
+  }
+}
+
 // ── 纯函数 ───────────────────────────────────────────────
 function parseSongList(html) {
   const re = /href="\/music\/(\d+)"[^>]*title="([^"]+)"/g;
@@ -189,7 +198,7 @@ async function resolvePlayUrl(musicId, deps = defaultDeps) {
   const appData = decodeAppData(html);
   if (!appData) throw new Error('无法解析歌曲信息');
   if (appData.mp3_type === 1) throw new Error('付费歌曲，暂不支持');
-  if (appData.should_verify) throw new Error('需要人机验证，暂时无法下载');
+  if (appData.should_verify) throw new VerificationRequiredError(musicId);
   const json = await deps.httpPost(`${BASE}/member/common-play-url`, { id: appData.play_id });
   let url = extractPlayUrl(json);
   if (url.includes('antiserver.kuwo.cn')) url = await convertKuwoUrl(url, deps);
@@ -214,4 +223,5 @@ module.exports = {
   searchSongs,
   resolvePlayUrl,
   downloadSong,
+  VerificationRequiredError,
 };

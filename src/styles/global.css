@@ -1606,6 +1606,42 @@ button.mini-download:hover {
   font-size: 12px;
 }
 
+.finder-verification {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.finder-verification button {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.88);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 620;
+}
+
+.finder-verification button:hover {
+  border-color: rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.13);
+  color: #fff;
+}
+
+.finder-source-note {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.045);
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .finder-dl {
   display: grid;
   place-items: center;

@@ -19,11 +19,13 @@ describe('Electron main window', () => {
     expect(mainSource).not.toMatch(/unlinkSync|rmSync|deleteFile|trashItem/);
   });
 
-  it('reveals local music in Finder through the shell without adding a web surface', () => {
+  it('reveals local music in Finder through the shell and opens only explicit verification links externally', () => {
     expect(mainSource).toContain("ipcMain.handle('musicol:reveal-local'");
     expect(mainSource).toContain('showItemInFolder');
     expect(preloadSource).toContain('revealLocalAudioFile');
-    expect(mainSource).not.toContain('openExternal');
+    expect(mainSource).toContain("ipcMain.handle('shell:open-external'");
+    expect(mainSource).toContain('shell.openExternal');
+    expect(preloadSource).toContain('openExternalUrl');
   });
 
   it('exposes in-process fangpi search and download, no external spawn', () => {

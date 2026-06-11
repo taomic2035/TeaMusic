@@ -10,4 +10,5 @@ contextBridge.exposeInMainWorld('teaMusicBackend', {
   readLocalArtwork: (filePath) => ipcRenderer.invoke('musicol:read-artwork', filePath),
   searchOnline: (query) => ipcRenderer.invoke('fangpi:search', query),
   downloadOnline: (musicId) => ipcRenderer.invoke('fangpi:download', musicId),
+  openExternalUrl: (url) => ipcRenderer.invoke('shell:open-external', url),
 });

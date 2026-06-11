@@ -66,6 +66,15 @@ function removeFromLocalLibrary(filePath) {
   return remaining;
 }
 
+function isAllowedExternalUrl(rawUrl) {
+  try {
+    const url = new URL(String(rawUrl || ''));
+    return (url.protocol === 'https:' || url.protocol === 'http:') && url.hostname === 'www.fangpi.net';
+  } catch {
+    return false;
+  }
+}
+
 ipcMain.handle('fangpi:search', async (_event, query) => {
   const normalizedQuery = String(query || '').trim();
 
@@ -93,8 +102,21 @@ ipcMain.handle('fangpi:download', async (_event, musicId) => {
   try {
     return await downloadSong(id, outputDir);
   } catch (error) {
+    if (error && error.code === 'VERIFY_REQUIRED' && error.verifyUrl) {
+      return { error: error.message, code: error.code, verifyUrl: error.verifyUrl };
+    }
+
     return { error: error instanceof Error ? error.message : '下载失败' };
   }
+});
+
+ipcMain.handle('shell:open-external', async (_event, rawUrl) => {
+  if (!isAllowedExternalUrl(rawUrl)) {
+    return false;
+  }
+
+  await shell.openExternal(String(rawUrl));
+  return true;
 });
 
 ipcMain.handle('musicol:scan-resolved', async () => {

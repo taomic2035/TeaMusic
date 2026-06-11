@@ -13,7 +13,11 @@ declare global {
       searchOnline?(query: string): Promise<Array<{ id: string; title: string; artist: string }>>;
       downloadOnline?(
         musicId: string,
-      ): Promise<{ filePath: string; title: string; artist: string } | { error: string }>;
+      ): Promise<
+        | { filePath: string; title: string; artist: string }
+        | { error: string; code?: 'VERIFY_REQUIRED'; verifyUrl?: string }
+      >;
+      openExternalUrl?(url: string): Promise<boolean>;
     };
   }
 }
