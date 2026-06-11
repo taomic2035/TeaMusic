@@ -16,6 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { ChangeEvent, CSSProperties, DragEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { LyricStage } from './components/LyricStage';
 import {
   Track,
   createLocalTrackFromFile,
@@ -301,6 +302,7 @@ export function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isTrackMenuOpen, setIsTrackMenuOpen] = useState(false);
   const [isVolumeOpen, setIsVolumeOpen] = useState(false);
+  const [isLyricsFullscreenOpen, setIsLyricsFullscreenOpen] = useState(false);
   const [downloadingIds, setDownloadingIds] = useState<Set<string>>(() => new Set());
   const [isDragActive, setIsDragActive] = useState(false);
   const [playbackMode, setPlaybackMode] = useState<PlaybackMode>(restorePlaybackMode);
@@ -748,8 +750,9 @@ export function App() {
       }
 
       if (event.key === 'Escape') {
-        if (isTrackMenuOpen || isVolumeOpen || isSearchOpen || isFinderOpen) {
+        if (isLyricsFullscreenOpen || isTrackMenuOpen || isVolumeOpen || isSearchOpen || isFinderOpen) {
           event.preventDefault();
+          setIsLyricsFullscreenOpen(false);
           setIsTrackMenuOpen(false);
           setIsVolumeOpen(false);
           setIsSearchOpen(false);
@@ -940,6 +943,14 @@ export function App() {
           </button>
         </section>
 
+        <LyricStage
+          currentTime={playbackTime.current}
+          duration={playbackTime.duration}
+          lyrics={currentTrack.lyrics ?? []}
+          mode="compact"
+          onOpenFullscreen={() => setIsLyricsFullscreenOpen(true)}
+        />
+
         <div className="progress-area">
           <span>{formatPlaybackTime(playbackTime.current)}</span>
           <input
@@ -1030,6 +1041,21 @@ export function App() {
           onTimeUpdate={handleTimeUpdate}
         />
       </footer>
+
+      {isLyricsFullscreenOpen ? (
+        <div className="lyrics-fullscreen" role="dialog" aria-label="全屏歌词">
+          <button aria-label="关闭全屏歌词" className="lyrics-close" onClick={() => setIsLyricsFullscreenOpen(false)}>
+            <X size={18} />
+          </button>
+          <LyricStage
+            currentTime={playbackTime.current}
+            duration={playbackTime.duration}
+            lyrics={currentTrack.lyrics ?? []}
+            mode="fullscreen"
+            onLineClick={handleSeekChange}
+          />
+        </div>
+      ) : null}
 
       {isFinderOpen ? (
         <div className="finder-overlay" role="dialog" aria-label="在线找歌" onClick={() => setIsFinderOpen(false)}>

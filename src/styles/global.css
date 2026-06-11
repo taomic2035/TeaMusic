@@ -662,6 +662,103 @@ button.mini-download:hover {
   font-weight: 700;
 }
 
+.lyric-stage {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: center;
+  cursor: pointer;
+  mask-image: linear-gradient(transparent, #000 18%, #000 82%, transparent);
+}
+
+.lyric-stage.fullscreen {
+  gap: 18px;
+  overflow-y: auto;
+  padding: 54px 26px 120px;
+  text-align: left;
+  mask-image: linear-gradient(transparent, #000 8%, #000 92%, transparent);
+}
+
+.lyric-line {
+  position: relative;
+  display: block;
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 14px;
+  line-height: 1.55;
+  transition: color 0.25s ease, font-size 0.25s ease, transform 0.25s ease;
+}
+
+.lyric-line.active {
+  color: rgba(255, 255, 255, 0.96);
+  font-size: 18px;
+  font-weight: 760;
+  text-shadow: 0 0 28px color-mix(in srgb, var(--theme-accent, #7bffb4) 44%, transparent);
+}
+
+.lyric-line.active::after {
+  position: absolute;
+  inset: -5px -18px;
+  pointer-events: none;
+  content: "";
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.32), transparent);
+  filter: blur(10px);
+  opacity: 0.78;
+  transform: translateX(calc((var(--lyric-progress, 0) * 100%) - 50%));
+}
+
+.char.active {
+  color: var(--theme-text-strong, rgba(255, 255, 255, 0.94));
+}
+
+.lyric-empty {
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 14px;
+}
+
+.lyrics-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background:
+    linear-gradient(rgba(4, 6, 8, 0.28), rgba(4, 6, 8, 0.86)),
+    var(--app-cover, #0d0e12);
+  background-position: center;
+  background-size: cover;
+  backdrop-filter: blur(30px) saturate(150%);
+}
+
+.lyrics-close {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 72;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lyric-line,
+  .lyric-line.active::after {
+    transition: none;
+  }
+
+  .lyric-line.active::after {
+    display: none;
+  }
+}
+
 .up-next {
   display: grid;
   gap: 7px;

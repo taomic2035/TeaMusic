@@ -212,6 +212,22 @@ describe('App shell', () => {
     expect(shell.style.getPropertyValue('--app-cover')).toContain('url(');
   });
 
+  it('renders compact synced lyrics on the immersive player screen', () => {
+    render(<App />);
+
+    expect(screen.getByLabelText('歌词预览')).toBeInTheDocument();
+    expect(document.querySelector('.lyric-line.active')).toBeInTheDocument();
+  });
+
+  it('opens fullscreen lyrics from the compact lyric stage', () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByLabelText('歌词预览'));
+
+    expect(screen.getByRole('dialog', { name: '全屏歌词' })).toBeInTheDocument();
+    expect(screen.getByLabelText('关闭全屏歌词')).toBeInTheDocument();
+  });
+
   it('opens the hidden finder and downloads an online track into the library', async () => {
     const downloadOnline = vi.fn(async () => ({
       filePath: 'D:/Music/TeaMusic/Resolved/周杰伦/晴天-周杰伦.mp3',
