@@ -1,5 +1,5 @@
 import { Music2, Search, X } from 'lucide-react';
-import { Track, getTrackBadge } from '../domain/music';
+import { Track } from '../domain/music';
 
 interface LibraryDrawerProps {
   tracks: Track[];
@@ -8,6 +8,7 @@ interface LibraryDrawerProps {
   query: string;
   onQueryChange: (query: string) => void;
   onClose: () => void;
+  onOpenFinder: () => void;
   onSelectTrack: (track: Track, options?: { keepPlaying?: boolean }) => void;
 }
 
@@ -22,6 +23,7 @@ export function LibraryDrawer({
   query,
   onQueryChange,
   onClose,
+  onOpenFinder,
   onSelectTrack,
 }: LibraryDrawerProps) {
   return (
@@ -30,9 +32,14 @@ export function LibraryDrawer({
       <section className="library-drawer glass-panel" role="dialog" aria-label="歌曲列表">
         <header className="library-drawer-head">
           <strong>歌曲列表</strong>
-          <button aria-label="关闭歌曲列表" onClick={onClose}>
-            <X size={17} />
-          </button>
+          <div className="library-drawer-actions">
+            <button className="finder-shortcut" onClick={onOpenFinder}>
+              在线找歌
+            </button>
+            <button aria-label="关闭歌曲列表" onClick={onClose}>
+              <X size={17} />
+            </button>
+          </div>
         </header>
 
         <label className="drawer-search">
@@ -53,8 +60,6 @@ export function LibraryDrawer({
             </div>
           ) : null}
           {tracks.map((track) => {
-            const badge = getTrackBadge(track);
-
             return (
               <button
                 className={track.id === currentTrackId ? 'track-row active' : 'track-row'}
@@ -81,7 +86,6 @@ export function LibraryDrawer({
                   <strong>{track.title}</strong>
                   <span>{getTrackSubtitle(track)}</span>
                 </div>
-                {badge ? <em>{badge}</em> : null}
               </button>
             );
           })}

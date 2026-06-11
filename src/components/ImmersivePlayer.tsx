@@ -12,7 +12,7 @@ import {
   SkipForward,
 } from 'lucide-react';
 import { ReactNode } from 'react';
-import { Track, formatPlaybackTime, getTrackBadge } from '../domain/music';
+import { Track, formatPlaybackTime } from '../domain/music';
 import { LyricStage } from './LyricStage';
 
 type PlaybackMode = 'queue' | 'repeat-one' | 'shuffle';
@@ -67,7 +67,6 @@ export function ImmersivePlayer({
   menu,
 }: ImmersivePlayerProps) {
   const ModeIcon = playbackMode === 'queue' ? Repeat : playbackMode === 'repeat-one' ? Repeat1 : Shuffle;
-  const badge = getTrackBadge(currentTrack);
 
   return (
     <section className={isPlaying ? 'immersive-player is-playing' : 'immersive-player is-idle'} aria-label="沉浸播放页">
@@ -92,7 +91,6 @@ export function ImmersivePlayer({
       <div className="immersive-meta" aria-label="当前播放">
         <h2>{currentTrack.title}</h2>
         <span>{getTrackSubtitle(currentTrack)}</span>
-        {badge ? <em>{badge}</em> : null}
       </div>
 
       <LyricStage
@@ -140,9 +138,8 @@ export function ImmersivePlayer({
         <button aria-label="更多操作" className={isMenuOpen ? 'active' : ''} onClick={onToggleMenu}>
           <MoreHorizontal size={20} />
         </button>
+        {menu}
       </div>
-
-      {menu}
     </section>
   );
 }

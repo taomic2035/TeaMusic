@@ -421,9 +421,14 @@ button {
   padding: 2px 4px 10px;
 }
 
+.library-drawer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .library-drawer-head button {
   display: grid;
-  width: 30px;
   height: 30px;
   place-items: center;
   border: 0;
@@ -431,6 +436,19 @@ button {
   background: transparent;
   color: inherit;
   cursor: pointer;
+}
+
+.library-drawer-head button:not(.finder-shortcut) {
+  width: 30px;
+}
+
+.finder-shortcut {
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--theme-accent, #7bffb4) 28%, transparent);
+  background: var(--theme-accent-soft, rgba(123, 255, 180, 0.18));
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  font-weight: 720;
 }
 
 .drawer-search {

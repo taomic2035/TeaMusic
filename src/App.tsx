@@ -1011,6 +1011,10 @@ export function App() {
           query={query}
           onQueryChange={setQuery}
           onClose={() => setIsLibraryDrawerOpen(false)}
+          onOpenFinder={() => {
+            setIsLibraryDrawerOpen(false);
+            setIsFinderOpen(true);
+          }}
           onSelectTrack={selectTrack}
         />
       ) : null}

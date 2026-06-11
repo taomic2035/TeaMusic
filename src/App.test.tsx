@@ -73,7 +73,7 @@ describe('App shell', () => {
     expect(within(library).getByText('没有匹配的歌曲')).toBeInTheDocument();
   });
 
-  it('adds local audio to the unified library with a special badge', () => {
+  it('adds local audio to the unified library without source badges', () => {
     render(<App />);
 
     fireEvent.change(screen.getByLabelText('添加本地音乐'), {
@@ -84,10 +84,10 @@ describe('App shell', () => {
 
     expect(screen.getAllByText('夜晚散步').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Taomic').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('本地').length).toBeGreaterThan(0);
+    expect(screen.queryByText('本地')).not.toBeInTheDocument();
   });
 
-  it('imports dropped local audio files with local badges', () => {
+  it('imports dropped local audio files without source badges', () => {
     render(<App />);
 
     const shell = document.querySelector('.app-shell') as HTMLElement;
@@ -99,7 +99,7 @@ describe('App shell', () => {
 
     expect(screen.getAllByText('拖进来的歌').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Taomic').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('本地').length).toBeGreaterThan(0);
+    expect(screen.queryByText('本地')).not.toBeInTheDocument();
   });
 
   it('imports dropped Mac lossless audio files even when the browser omits a MIME type', () => {
@@ -114,10 +114,10 @@ describe('App shell', () => {
 
     expect(screen.getAllByText('母带现场').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Taomic').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('本地').length).toBeGreaterThan(0);
+    expect(screen.queryByText('本地')).not.toBeInTheDocument();
   });
 
-  it('imports native local paths from the Mac shell with local badges', async () => {
+  it('imports native local paths from the Mac shell without source badges', async () => {
     const chooseLocalAudioFiles = vi.fn(async () => ['/Users/taomic/Music/TeaMusic/Local/玻璃夜航-Taomic.m4a']);
     window.teaMusicBackend = {
       scanResolvedLibrary: async () => [],
@@ -134,9 +134,18 @@ describe('App shell', () => {
       expect(screen.getAllByText('玻璃夜航').length).toBeGreaterThan(0);
     });
     expect(within(getLibrary()).getByRole('button', { name: /玻璃夜航/ })).toHaveTextContent('Taomic');
-    expect(screen.getAllByText('本地').length).toBeGreaterThan(0);
+    expect(screen.queryByText('本地')).not.toBeInTheDocument();
 
     delete window.teaMusicBackend;
+  });
+
+  it('opens online finder directly from the library drawer', () => {
+    render(<App />);
+
+    const library = openLibrary();
+    fireEvent.click(within(library).getByRole('button', { name: '在线找歌' }));
+
+    expect(screen.getByRole('dialog', { name: '在线找歌' })).toBeInTheDocument();
   });
 
   it('does not duplicate native local paths returned from the Mac shell', async () => {
@@ -736,7 +745,7 @@ describe('App shell', () => {
     await waitFor(() => {
       expect(within(getLibrary()).getByText('启动恢复')).toBeInTheDocument();
     });
-    expect(screen.getAllByText('已补全').length).toBeGreaterThan(0);
+    expect(screen.queryByText('已补全')).not.toBeInTheDocument();
 
     delete window.teaMusicBackend;
   });
@@ -754,7 +763,7 @@ describe('App shell', () => {
     });
     const restoredRow = within(getLibrary()).getByRole('button', { name: /重启还在/ });
     expect(restoredRow).toHaveTextContent('Taomic');
-    expect(restoredRow).toHaveTextContent('本地');
+    expect(restoredRow).not.toHaveTextContent('本地');
 
     delete window.teaMusicBackend;
   });
@@ -825,7 +834,7 @@ describe('App shell', () => {
     await waitFor(() => {
       expect(within(getLibrary()).getByRole('button', { name: /扫描兜底/ })).toBeInTheDocument();
     });
-    expect(screen.getAllByText('本地').length).toBeGreaterThan(0);
+    expect(screen.queryByText('本地')).not.toBeInTheDocument();
 
     delete window.teaMusicBackend;
   });
