@@ -320,6 +320,43 @@ describe('App shell', () => {
     delete window.teaMusicBackend;
   });
 
+  it('opens verification and resumes online search when the source blocks search', async () => {
+    const searchOnline = vi
+      .fn()
+      .mockResolvedValueOnce({
+        error: '需要真人检测，验证后继续搜索',
+        code: 'VERIFY_REQUIRED' as const,
+        verifyUrl: 'https://www.fangpi.net/s/%E6%99%B4%E5%A4%A9',
+      })
+      .mockResolvedValueOnce([{ id: '402856', title: '晴天', artist: '周杰伦' }]);
+    const openVerificationPage = vi.fn(async () => true);
+    window.teaMusicBackend = {
+      scanResolvedLibrary: async () => [],
+      scanLocalLibrary: async () => [],
+      chooseLocalAudioFiles: async () => [],
+      searchOnline,
+      downloadOnline: async () => ({ error: 'unused' }),
+      openVerificationPage,
+    };
+
+    render(<App />);
+    fireEvent.click(screen.getByLabelText('更多操作'));
+    fireEvent.click(screen.getByText('在线找歌'));
+    const finderInput = screen.getByPlaceholderText('歌名或歌手，回车搜索');
+    fireEvent.change(finderInput, { target: { value: '晴天' } });
+    fireEvent.keyDown(finderInput, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(openVerificationPage).toHaveBeenCalledWith('https://www.fangpi.net/s/%E6%99%B4%E5%A4%A9');
+    });
+    await waitFor(() => {
+      expect(searchOnline).toHaveBeenCalledTimes(2);
+    });
+    expect(screen.getByText('晴天')).toBeInTheDocument();
+
+    delete window.teaMusicBackend;
+  });
+
   it('opens an in-app verification window and retries a protected online download automatically', async () => {
     const downloadOnline = vi
       .fn()
@@ -357,11 +394,8 @@ describe('App shell', () => {
     fireEvent.click(screen.getByLabelText('下载'));
 
     await waitFor(() => {
-      expect(screen.getByText(/需要真人检测/)).toBeInTheDocument();
+      expect(openVerificationPage).toHaveBeenCalledWith('https://www.fangpi.net/music/402856');
     });
-    fireEvent.click(screen.getByRole('button', { name: '打开验证窗口' }));
-
-    expect(openVerificationPage).toHaveBeenCalledWith('https://www.fangpi.net/music/402856');
     await waitFor(() => {
       expect(downloadOnline).toHaveBeenCalledTimes(2);
     });

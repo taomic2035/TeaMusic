@@ -10,7 +10,11 @@ declare global {
       revealLocalAudioFile?(filePath: string): Promise<boolean>;
       readLocalArtwork?(filePath: string): Promise<string | null>;
       readLocalLyrics?(filePath: string): Promise<string | null>;
-      searchOnline?(query: string): Promise<Array<{ id: string; title: string; artist: string }>>;
+      searchOnline?(
+        query: string,
+      ): Promise<
+        Array<{ id: string; title: string; artist: string }> | { error: string; code?: 'VERIFY_REQUIRED'; verifyUrl?: string }
+      >;
       downloadOnline?(
         musicId: string,
       ): Promise<

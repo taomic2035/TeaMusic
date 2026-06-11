@@ -11,11 +11,11 @@ const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 const TIMEOUT = 50000;
 
 class VerificationRequiredError extends Error {
-  constructor(musicId) {
+  constructor(musicId, verifyUrl = `${BASE}/music/${encodeURIComponent(String(musicId))}`) {
     super('需要真人检测，打开验证页面后再重试下载');
     this.name = 'VerificationRequiredError';
     this.code = 'VERIFY_REQUIRED';
-    this.verifyUrl = `${BASE}/music/${encodeURIComponent(String(musicId))}`;
+    this.verifyUrl = verifyUrl;
   }
 }
 
@@ -76,6 +76,10 @@ function extractPlayUrl(jsonText) {
   const data = JSON.parse(jsonText);
   if (data.code === 1 && data.data && data.data.url) return data.data.url;
   throw new Error(data.msg || '无法获取播放地址');
+}
+
+function isVerificationChallenge(html) {
+  return /Just a moment|challenges\.cloudflare\.com|cf-browser-verification|cf-challenge/i.test(String(html || ''));
 }
 
 // ── HTTP（默认实现，测试可注入替换）─────────────────────
@@ -200,6 +204,9 @@ async function searchSongs(keyword, deps = defaultDeps) {
   if (!kw) return [];
   try { await deps.httpPost(`${BASE}/api/s`, { keyword: kw }); } catch {}
   const html = await deps.httpGet(`${BASE}/s/${encodeURIComponent(kw)}`);
+  if (isVerificationChallenge(html)) {
+    throw new VerificationRequiredError(kw, `${BASE}/s/${encodeURIComponent(kw)}`);
+  }
   return parseSongList(html);
 }
 
@@ -230,6 +237,7 @@ module.exports = {
   decodeAppData,
   sanitize,
   extractPlayUrl,
+  isVerificationChallenge,
   searchSongs,
   resolvePlayUrl,
   downloadSong,

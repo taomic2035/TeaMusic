@@ -75,6 +75,19 @@ describe('fangpi-source pure helpers', () => {
       { type: 'download' },
     ]);
   });
+
+  it('turns Cloudflare challenge pages into verification-required search results', async () => {
+    const deps = {
+      httpPost: async () => '',
+      httpGet: async () => '<!DOCTYPE html><html><head><title>Just a moment...</title></head></html>',
+      downloadBinary: async () => {},
+    };
+
+    await expect(fangpi.searchSongs('晴天', deps)).rejects.toMatchObject({
+      code: 'VERIFY_REQUIRED',
+      verifyUrl: 'https://www.fangpi.net/s/%E6%99%B4%E5%A4%A9',
+    });
+  });
 });
 
 describe('fangpi-source orchestration (injected http)', () => {

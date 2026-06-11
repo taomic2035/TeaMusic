@@ -106,8 +106,14 @@ ipcMain.handle('fangpi:search', async (_event, query) => {
   }
 
   try {
-    return await searchSongs(normalizedQuery);
-  } catch {
+    const requestHeaders = await fangpiRequestHeaders();
+    const deps = Object.keys(requestHeaders).length > 0 ? withRequestHeaders(requestHeaders) : undefined;
+    return await searchSongs(normalizedQuery, deps);
+  } catch (error) {
+    if (error && error.code === 'VERIFY_REQUIRED' && error.verifyUrl) {
+      return { error: error.message, code: error.code, verifyUrl: error.verifyUrl };
+    }
+
     return [];
   }
 });
