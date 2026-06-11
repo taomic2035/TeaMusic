@@ -371,6 +371,40 @@ describe('App shell', () => {
     delete window.teaMusicBackend;
   });
 
+  it('stops automatic search download when verification does not release the source', async () => {
+    const searchOnline = vi.fn(async () => ({
+      error: '需要真人检测，验证后继续搜索',
+      code: 'VERIFY_REQUIRED' as const,
+      verifyUrl: 'https://www.fangpi.net/s/%E6%88%90%E9%83%BD%20%E8%B5%B5%E9%9B%B7',
+    }));
+    const downloadOnline = vi.fn(async () => ({ error: 'unused' }));
+    const openVerificationPage = vi.fn(async () => true);
+    window.teaMusicBackend = {
+      scanResolvedLibrary: async () => [],
+      scanLocalLibrary: async () => [],
+      chooseLocalAudioFiles: async () => [],
+      searchOnline,
+      downloadOnline,
+      openVerificationPage,
+    };
+
+    render(<App />);
+    fireEvent.click(screen.getByLabelText('更多操作'));
+    fireEvent.click(screen.getByText('在线找歌'));
+    const finderInput = screen.getByPlaceholderText('歌名或歌手，回车搜索');
+    fireEvent.change(finderInput, { target: { value: '成都 赵雷' } });
+    fireEvent.keyDown(finderInput, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(searchOnline).toHaveBeenCalledTimes(2);
+    });
+    expect(openVerificationPage).toHaveBeenCalledTimes(1);
+    expect(downloadOnline).not.toHaveBeenCalled();
+    expect(screen.getByText(/源站真人检测未放行，未下载/)).toBeInTheDocument();
+
+    delete window.teaMusicBackend;
+  });
+
   it('opens an in-app verification window and retries a protected online download automatically', async () => {
     const downloadOnline = vi
       .fn()
@@ -416,6 +450,44 @@ describe('App shell', () => {
     await waitFor(() => {
       expect(within(getLibrary()).getByRole('button', { name: /晴天/ })).toBeInTheDocument();
     });
+
+    delete window.teaMusicBackend;
+  });
+
+  it('stops automatic download when verification does not release the source', async () => {
+    const downloadOnline = vi.fn(async () => ({
+      error: '需要真人检测，验证后再重试下载',
+      code: 'VERIFY_REQUIRED' as const,
+      verifyUrl: 'https://www.fangpi.net/music/402856',
+    }));
+    const openVerificationPage = vi.fn(async () => true);
+    window.teaMusicBackend = {
+      scanResolvedLibrary: async () => [],
+      scanLocalLibrary: async () => [],
+      chooseLocalAudioFiles: async () => [],
+      searchOnline: async () => [{ id: '402856', title: '成都', artist: '赵雷' }],
+      downloadOnline,
+      openVerificationPage,
+    };
+
+    render(<App />);
+    fireEvent.click(screen.getByLabelText('更多操作'));
+    fireEvent.click(screen.getByText('在线找歌'));
+    const finderInput = screen.getByPlaceholderText('歌名或歌手，回车搜索');
+    fireEvent.change(finderInput, { target: { value: '成都 赵雷' } });
+    fireEvent.keyDown(finderInput, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(screen.getByText('成都')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByLabelText('下载'));
+
+    await waitFor(() => {
+      expect(downloadOnline).toHaveBeenCalledTimes(2);
+    });
+    expect(openVerificationPage).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/源站真人检测未放行，未下载/)).toBeInTheDocument();
 
     delete window.teaMusicBackend;
   });

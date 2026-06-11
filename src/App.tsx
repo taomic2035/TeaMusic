@@ -101,6 +101,7 @@ const trackStatsStorageKey = 'teaMusic:trackStats';
 const currentTrackStorageKey = 'teaMusic:currentTrackId';
 const volumeStorageKey = 'teaMusic:volume';
 const playbackModeStorageKey = 'teaMusic:playbackMode';
+const sourceVerificationBlockedMessage = '源站真人检测未放行，未下载。请稍后重试或换一个来源';
 
 type StoredTrackStats = Record<string, { playCount?: number; lastPlayedAt?: string; skipCount?: number; lastSkippedAt?: string }>;
 
@@ -627,7 +628,9 @@ export function App() {
       if (!Array.isArray(results)) {
         if (results?.code === 'VERIFY_REQUIRED' && results.verifyUrl) {
           setFinderVerification({ type: 'search', title: trimmedQuery, verifyUrl: results.verifyUrl });
-          setFinderError(results.error || '需要真人检测，验证后继续搜索');
+          setFinderError(
+            hasRetriedVerification ? sourceVerificationBlockedMessage : results.error || '需要真人检测，验证后继续搜索',
+          );
 
           if (!hasRetriedVerification && backend.openVerificationPage) {
             setFinderError('需要真人检测，正在打开验证窗口...');
@@ -690,7 +693,9 @@ export function App() {
         setFinderResults((rows) => rows.filter((row) => row.id !== song.id));
       } else if (result?.code === 'VERIFY_REQUIRED' && result.verifyUrl) {
         setFinderVerification({ type: 'download', songId: song.id, title: song.title, verifyUrl: result.verifyUrl });
-        setFinderError(result.error || '需要真人检测，打开验证页面后再重试下载');
+        setFinderError(
+          hasRetriedVerification ? sourceVerificationBlockedMessage : result.error || '需要真人检测，打开验证页面后再重试下载',
+        );
 
         if (!hasRetriedVerification && backend.openVerificationPage) {
           setFinderError('需要真人检测，正在打开验证窗口...');
