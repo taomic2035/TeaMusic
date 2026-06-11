@@ -746,6 +746,33 @@ describe('App shell', () => {
     delete window.teaMusicBackend;
   });
 
+  it('loads sidecar lyrics for restored local music', async () => {
+    const filePath = '/Users/taomic/Music/TeaMusic/Local/玻璃夜航-Taomic.wav';
+    const readLocalLyrics = vi.fn(async () => '[00:01.00]把歌词放回播放器\n[00:05.00]让光从歌词上划过');
+    window.teaMusicBackend = {
+      scanResolvedLibrary: async () => [],
+      scanLocalLibrary: async () => [filePath],
+      chooseLocalAudioFiles: async () => [],
+      readLocalLyrics,
+    };
+
+    render(<App />);
+    await waitFor(() => {
+      expect(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /玻璃夜航/ })).toBeInTheDocument();
+    });
+
+    fireEvent.click(within(screen.getByLabelText('歌曲列表')).getByRole('button', { name: /玻璃夜航/ }));
+
+    await waitFor(() => {
+      expect(readLocalLyrics).toHaveBeenCalledWith(filePath);
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText('歌词预览')).toHaveTextContent('把歌词放回播放器');
+    });
+
+    delete window.teaMusicBackend;
+  });
+
   it('still restores local music when resolved library scanning fails on launch', async () => {
     window.teaMusicBackend = {
       scanResolvedLibrary: async () => {

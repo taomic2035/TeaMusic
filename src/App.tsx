@@ -28,6 +28,7 @@ import {
   getTrackBadge,
   markTrackPlayed,
   markTrackSkipped,
+  parseLrc,
 } from './domain/music';
 
 type PlaybackMode = 'queue' | 'repeat-one' | 'shuffle';
@@ -464,6 +465,38 @@ export function App() {
       isMounted = false;
     };
   }, [currentTrack.coverUrl, currentTrack.filePath, currentTrack.id]);
+
+  useEffect(() => {
+    if (!currentTrack.filePath || currentTrack.lyrics || !window.teaMusicBackend?.readLocalLyrics) {
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadLyrics() {
+      const lyricContent = await window.teaMusicBackend?.readLocalLyrics?.(currentTrack.filePath ?? '');
+
+      if (!isMounted || !lyricContent) {
+        return;
+      }
+
+      const parsedLyrics = parseLrc(lyricContent);
+
+      if (parsedLyrics.length === 0) {
+        return;
+      }
+
+      setTracks((existingTracks) =>
+        existingTracks.map((track) => (track.id === currentTrack.id ? { ...track, lyrics: parsedLyrics } : track)),
+      );
+    }
+
+    void loadLyrics();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentTrack.filePath, currentTrack.id, currentTrack.lyrics]);
 
   useEffect(() => {
     const trackChanged = previousTrackIdRef.current !== currentTrackId;
