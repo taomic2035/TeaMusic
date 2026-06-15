@@ -282,7 +282,7 @@ describe('App shell', () => {
     expect(document.querySelector('.volume-pop')).not.toBeInTheDocument();
   });
 
-  it('opens the hidden finder and downloads an online track into the library', async () => {
+  it('opens the hidden finder, auto-downloads the best match and plays it', async () => {
     const downloadOnline = vi.fn(async () => ({
       filePath: 'D:/Music/TeaMusic/Archive/周杰伦/晴天 - 周杰伦.mp3',
       title: '晴天',
@@ -303,16 +303,11 @@ describe('App shell', () => {
     fireEvent.change(finderInput, { target: { value: '晴天' } });
     fireEvent.keyDown(finderInput, { key: 'Enter' });
 
-    await waitFor(() => {
-      expect(screen.getByText('晴天')).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByLabelText('下载'));
-
+    // 搜索成功后自动下载最佳匹配
     await waitFor(() => {
       expect(downloadOnline).toHaveBeenCalledWith('402856');
     });
-    fireEvent.click(screen.getByLabelText('关闭在线找歌'));
+    // 下载成功后自动入库
     await waitFor(() => {
       expect(within(getLibrary()).getByRole('button', { name: /晴天/ })).toBeInTheDocument();
     });
@@ -320,32 +315,19 @@ describe('App shell', () => {
     delete window.teaMusicBackend;
   });
 
-  it('opens verification, resumes online search and downloads the best ranked match', async () => {
-    const searchOnline = vi
-      .fn()
-      .mockResolvedValueOnce({
-        error: '需要真人检测，验证后继续搜索',
-        code: 'VERIFY_REQUIRED' as const,
-        verifyUrl: 'https://www.fangpi.net/s/%E6%99%B4%E5%A4%A9',
-      })
-      .mockResolvedValueOnce([
-        { id: '100', title: '晴天娃娃', artist: '江语晨' },
-        { id: '402856', title: '晴天', artist: '周杰伦' },
-        { id: '101', title: '晴天', artist: '五月天' },
-      ]);
-    const downloadOnline = vi.fn(async () => ({
-      filePath: 'D:/Music/TeaMusic/Archive/周杰伦/晴天 - 周杰伦.mp3',
-      title: '晴天',
-      artist: '周杰伦',
+  it('shows retry button when search verification times out (backend handles verification automatically)', async () => {
+    const searchOnline = vi.fn(async () => ({
+      error: '需要真人检测，验证后继续搜索',
+      code: 'VERIFY_REQUIRED' as const,
+      verifyUrl: 'https://www.fangpi.net/s/%E6%99%B4%E5%A4%A9',
     }));
-    const openVerificationPage = vi.fn(async () => true);
+    const downloadOnline = vi.fn(async () => ({ error: 'unused' }));
     window.teaMusicBackend = {
       scanResolvedLibrary: async () => [],
       scanLocalLibrary: async () => [],
       chooseLocalAudioFiles: async () => [],
       searchOnline,
       downloadOnline,
-      openVerificationPage,
     };
 
     render(<App />);
@@ -355,57 +337,99 @@ describe('App shell', () => {
     fireEvent.change(finderInput, { target: { value: '晴天' } });
     fireEvent.keyDown(finderInput, { key: 'Enter' });
 
+    // 后端 workerGet 自动处理验证，走到这里说明验证超时
     await waitFor(() => {
-      expect(openVerificationPage).toHaveBeenCalledWith('https://www.fangpi.net/s/%E6%99%B4%E5%A4%A9');
+      expect(screen.getByText(/源站真人检测未放行/)).toBeInTheDocument();
     });
-    await waitFor(() => {
-      expect(searchOnline).toHaveBeenCalledTimes(2);
-    });
-    await waitFor(() => {
-      expect(downloadOnline).toHaveBeenCalledWith('402856');
-    });
-    await waitFor(() => {
-      expect(within(getLibrary()).getByRole('button', { name: /晴天/ })).toBeInTheDocument();
-    });
+    // 显示重试按钮
+    expect(screen.getByText('重试')).toBeInTheDocument();
+    expect(downloadOnline).not.toHaveBeenCalled();
 
     delete window.teaMusicBackend;
   });
 
-  it('stops automatic search download when verification does not release the source', async () => {
-    const searchOnline = vi.fn(async () => ({
-      error: '需要真人检测，验证后继续搜索',
-      code: 'VERIFY_REQUIRED' as const,
-      verifyUrl: 'https://www.fangpi.net/s/%E6%88%90%E9%83%BD%20%E8%B5%B5%E9%9B%B7',
+  it('retries search when user clicks retry after verification timeout', async () => {
+    const searchOnline = vi
+      .fn()
+      .mockResolvedValueOnce({
+        error: '需要真人检测，验证后继续搜索',
+        code: 'VERIFY_REQUIRED' as const,
+        verifyUrl: 'https://www.fangpi.net/s/%E6%99%B4%E5%A4%A9',
+      })
+      .mockResolvedValueOnce([
+        { id: '402856', title: '晴天', artist: '周杰伦' },
+      ]);
+    const downloadOnline = vi.fn(async () => ({
+      filePath: 'D:/Music/TeaMusic/Archive/周杰伦/晴天 - 周杰伦.mp3',
+      title: '晴天',
+      artist: '周杰伦',
     }));
-    const downloadOnline = vi.fn(async () => ({ error: 'unused' }));
-    const openVerificationPage = vi.fn(async () => true);
     window.teaMusicBackend = {
       scanResolvedLibrary: async () => [],
       scanLocalLibrary: async () => [],
       chooseLocalAudioFiles: async () => [],
       searchOnline,
       downloadOnline,
-      openVerificationPage,
     };
 
     render(<App />);
     fireEvent.click(screen.getByLabelText('更多操作'));
     fireEvent.click(screen.getByText('在线找歌'));
     const finderInput = screen.getByPlaceholderText('歌名或歌手，回车搜索');
-    fireEvent.change(finderInput, { target: { value: '成都 赵雷' } });
+    fireEvent.change(finderInput, { target: { value: '晴天' } });
     fireEvent.keyDown(finderInput, { key: 'Enter' });
 
+    // 第一次搜索返回 VERIFY_REQUIRED
+    await waitFor(() => {
+      expect(screen.getByText(/源站真人检测未放行/)).toBeInTheDocument();
+    });
+
+    // 点击重试 → 第二次搜索成功
+    fireEvent.click(screen.getByText('重试'));
     await waitFor(() => {
       expect(searchOnline).toHaveBeenCalledTimes(2);
     });
-    expect(openVerificationPage).toHaveBeenCalledTimes(1);
-    expect(downloadOnline).not.toHaveBeenCalled();
-    expect(screen.getByText(/源站真人检测未放行，未下载/)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(downloadOnline).toHaveBeenCalledWith('402856');
+    });
 
     delete window.teaMusicBackend;
   });
 
-  it('opens an in-app verification window and retries a protected online download automatically', async () => {
+  it('shows retry button when download verification times out', async () => {
+    const downloadOnline = vi.fn(async () => ({
+      error: '需要真人检测，验证后再重试下载',
+      code: 'VERIFY_REQUIRED' as const,
+      verifyUrl: 'https://www.fangpi.net/music/402856',
+    }));
+    window.teaMusicBackend = {
+      scanResolvedLibrary: async () => [],
+      scanLocalLibrary: async () => [],
+      chooseLocalAudioFiles: async () => [],
+      searchOnline: async () => [{ id: '402856', title: '晴天', artist: '周杰伦' }],
+      downloadOnline,
+    };
+
+    render(<App />);
+    fireEvent.click(screen.getByLabelText('更多操作'));
+    fireEvent.click(screen.getByText('在线找歌'));
+    const finderInput = screen.getByPlaceholderText('歌名或歌手，回车搜索');
+    fireEvent.change(finderInput, { target: { value: '晴天' } });
+    fireEvent.keyDown(finderInput, { key: 'Enter' });
+
+    // 搜索成功 → 自动下载 → 下载遇到验证超时
+    await waitFor(() => {
+      expect(downloadOnline).toHaveBeenCalledWith('402856');
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/源站真人检测未放行/)).toBeInTheDocument();
+    });
+    expect(screen.getByText('重试')).toBeInTheDocument();
+
+    delete window.teaMusicBackend;
+  });
+
+  it('retries download when user clicks retry after verification timeout', async () => {
     const downloadOnline = vi
       .fn()
       .mockResolvedValueOnce({
@@ -418,14 +442,12 @@ describe('App shell', () => {
         title: '晴天',
         artist: '周杰伦',
       });
-    const openVerificationPage = vi.fn(async () => true);
     window.teaMusicBackend = {
       scanResolvedLibrary: async () => [],
       scanLocalLibrary: async () => [],
       chooseLocalAudioFiles: async () => [],
       searchOnline: async () => [{ id: '402856', title: '晴天', artist: '周杰伦' }],
       downloadOnline,
-      openVerificationPage,
     };
 
     render(<App />);
@@ -435,59 +457,19 @@ describe('App shell', () => {
     fireEvent.change(finderInput, { target: { value: '晴天' } });
     fireEvent.keyDown(finderInput, { key: 'Enter' });
 
+    // 搜索成功 → 自动下载 → 第一次遇到验证超时
     await waitFor(() => {
-      expect(screen.getByText('晴天')).toBeInTheDocument();
+      expect(screen.getByText(/源站真人检测未放行/)).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByLabelText('下载'));
-
-    await waitFor(() => {
-      expect(openVerificationPage).toHaveBeenCalledWith('https://www.fangpi.net/music/402856');
-    });
+    // 点击重试 → 第二次下载成功
+    fireEvent.click(screen.getByText('重试'));
     await waitFor(() => {
       expect(downloadOnline).toHaveBeenCalledTimes(2);
     });
     await waitFor(() => {
       expect(within(getLibrary()).getByRole('button', { name: /晴天/ })).toBeInTheDocument();
     });
-
-    delete window.teaMusicBackend;
-  });
-
-  it('stops automatic download when verification does not release the source', async () => {
-    const downloadOnline = vi.fn(async () => ({
-      error: '需要真人检测，验证后再重试下载',
-      code: 'VERIFY_REQUIRED' as const,
-      verifyUrl: 'https://www.fangpi.net/music/402856',
-    }));
-    const openVerificationPage = vi.fn(async () => true);
-    window.teaMusicBackend = {
-      scanResolvedLibrary: async () => [],
-      scanLocalLibrary: async () => [],
-      chooseLocalAudioFiles: async () => [],
-      searchOnline: async () => [{ id: '402856', title: '成都', artist: '赵雷' }],
-      downloadOnline,
-      openVerificationPage,
-    };
-
-    render(<App />);
-    fireEvent.click(screen.getByLabelText('更多操作'));
-    fireEvent.click(screen.getByText('在线找歌'));
-    const finderInput = screen.getByPlaceholderText('歌名或歌手，回车搜索');
-    fireEvent.change(finderInput, { target: { value: '成都 赵雷' } });
-    fireEvent.keyDown(finderInput, { key: 'Enter' });
-
-    await waitFor(() => {
-      expect(screen.getByText('成都')).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByLabelText('下载'));
-
-    await waitFor(() => {
-      expect(downloadOnline).toHaveBeenCalledTimes(2);
-    });
-    expect(openVerificationPage).toHaveBeenCalledTimes(1);
-    expect(screen.getByText(/源站真人检测未放行，未下载/)).toBeInTheDocument();
 
     delete window.teaMusicBackend;
   });

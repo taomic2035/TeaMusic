@@ -604,7 +604,16 @@ export function App() {
     setCurrentTrackId(localTracks[0].id);
   }
 
-  async function runOnlineSearch(hasRetriedVerification = false) {
+  // 后端 workerGet 遇到 Cloudflare 挑战时自动弹出验证窗口并等待用户完成验证。
+  // 前端只需监听 fangpi:verification-needed 事件来更新提示文案。
+  useEffect(() => {
+    const cleanup = window.teaMusicBackend?.onVerificationNeeded?.(() => {
+      setFinderError('需要真人验证，请在弹出的窗口中点击验证...');
+    });
+    return cleanup;
+  }, []);
+
+  async function runOnlineSearch() {
     const trimmedQuery = finderQuery.trim();
     const backend = window.teaMusicBackend;
 
@@ -627,23 +636,9 @@ export function App() {
 
       if (!Array.isArray(results)) {
         if (results?.code === 'VERIFY_REQUIRED' && results.verifyUrl) {
+          // workerGet 已自动弹出验证窗口并等待，走到这里说明验证超时
+          setFinderError(sourceVerificationBlockedMessage);
           setFinderVerification({ type: 'search', title: trimmedQuery, verifyUrl: results.verifyUrl });
-          setFinderError(
-            hasRetriedVerification ? sourceVerificationBlockedMessage : results.error || '需要真人检测，验证后继续搜索',
-          );
-
-          if (!hasRetriedVerification && backend.openVerificationPage) {
-            setFinderError('需要真人检测，正在打开验证窗口...');
-            const opened = await backend.openVerificationPage(results.verifyUrl);
-
-            if (opened) {
-              setFinderError('验证窗口已关闭，正在继续搜索...');
-              await runOnlineSearch(true);
-              return;
-            }
-
-            setFinderError('无法打开验证窗口，请稍后再试');
-          }
         } else {
           setFinderError(results?.error || '搜索失败，稍后再试');
         }
@@ -653,14 +648,13 @@ export function App() {
 
       setFinderResults(results);
 
-      if (hasRetriedVerification) {
-        const bestMatch = chooseBestFinderSong(results, trimmedQuery);
+      // 搜索成功后自动选最佳匹配并下载（全自动，用户只需等验证）
+      const bestMatch = chooseBestFinderSong(results, trimmedQuery);
 
-        if (bestMatch) {
-          setFinderError(`已匹配 ${bestMatch.title} - ${bestMatch.artist}，正在下载...`);
-          await downloadFromFinder(bestMatch);
-          return;
-        }
+      if (bestMatch) {
+        setFinderError(`正在下载 ${bestMatch.title} - ${bestMatch.artist}...`);
+        await downloadFromFinder(bestMatch);
+        return;
       }
 
       if (results.length === 0) {
@@ -673,7 +667,7 @@ export function App() {
     }
   }
 
-  async function downloadFromFinder(song: FinderSong, hasRetriedVerification = false) {
+  async function downloadFromFinder(song: FinderSong) {
     const backend = window.teaMusicBackend;
 
     if (!backend?.downloadOnline || downloadingIds.has(song.id)) {
@@ -691,24 +685,15 @@ export function App() {
         const downloadedTrack = createResolvedTrackFromPath(result.filePath, new Date().toISOString());
         setTracks((existingTracks) => mergeTracksById([downloadedTrack], existingTracks));
         setFinderResults((rows) => rows.filter((row) => row.id !== song.id));
+        // 下载成功：自动切歌播放 + 关闭找歌面板
+        setCurrentTrackId(downloadedTrack.id);
+        setIsPlaying(true);
+        setPlaybackTime({ current: 0, duration: downloadedTrack.duration ?? 181 });
+        setIsFinderOpen(false);
       } else if (result?.code === 'VERIFY_REQUIRED' && result.verifyUrl) {
+        // workerGet 已自动弹出验证窗口并等待，走到这里说明验证超时
+        setFinderError(sourceVerificationBlockedMessage);
         setFinderVerification({ type: 'download', songId: song.id, title: song.title, verifyUrl: result.verifyUrl });
-        setFinderError(
-          hasRetriedVerification ? sourceVerificationBlockedMessage : result.error || '需要真人检测，打开验证页面后再重试下载',
-        );
-
-        if (!hasRetriedVerification && backend.openVerificationPage) {
-          setFinderError('需要真人检测，正在打开验证窗口...');
-          const opened = await backend.openVerificationPage(result.verifyUrl);
-
-          if (opened) {
-            setFinderError('验证窗口已关闭，正在继续下载...');
-            await downloadFromFinder(song, true);
-            return;
-          }
-
-          setFinderError('无法打开验证窗口，请稍后再试');
-        }
       } else {
         setFinderError(result?.error || '这首暂时下不了，换一首');
       }
@@ -723,30 +708,21 @@ export function App() {
     }
   }
 
-  async function openFinderVerification() {
-    const backend = window.teaMusicBackend;
-
-    if (!finderVerification?.verifyUrl || !backend?.openVerificationPage) {
-      setFinderError('无法打开验证窗口，请稍后再试');
+  function retryAfterVerification() {
+    if (!finderVerification) {
       return;
     }
 
-    const verification = finderVerification;
-    const opened = await backend.openVerificationPage(verification.verifyUrl);
+    if (finderVerification.type === 'search') {
+      setFinderError('正在重试搜索...');
+      void runOnlineSearch();
+    } else {
+      const retrySong = finderResults.find((row) => row.id === finderVerification.songId);
 
-    if (!opened) {
-      setFinderError('无法打开验证窗口，请稍后再试');
-      return;
-    }
-
-    const retrySong = finderResults.find((row) => row.id === verification.songId);
-
-    if (verification.type === 'search') {
-      setFinderError('验证窗口已关闭，正在继续搜索...');
-      await runOnlineSearch(true);
-    } else if (retrySong) {
-      setFinderError('验证窗口已关闭，正在继续下载...');
-      await downloadFromFinder(retrySong, true);
+      if (retrySong) {
+        setFinderError('正在重试下载...');
+        void downloadFromFinder(retrySong);
+      }
     }
   }
 
@@ -1236,25 +1212,11 @@ export function App() {
             {finderError ? <p className="finder-hint">{finderError}</p> : null}
             {finderVerification ? (
               <div className="finder-verification">
-                <button type="button" onClick={() => void openFinderVerification()}>
-                  打开验证窗口
-                </button>
                 <button
                   type="button"
-                  aria-label={`${finderVerification.type === 'search' ? '重试搜索' : '重试下载'} ${finderVerification.title}`}
-                  onClick={() => {
-                    if (finderVerification.type === 'search') {
-                      void runOnlineSearch(true);
-                    } else {
-                      const retrySong = finderResults.find((row) => row.id === finderVerification.songId);
-
-                      if (retrySong) {
-                        void downloadFromFinder(retrySong, true);
-                      }
-                    }
-                  }}
+                  onClick={() => retryAfterVerification()}
                 >
-                  {finderVerification.type === 'search' ? '重试搜索' : '重试下载'}
+                  重试
                 </button>
               </div>
             ) : null}

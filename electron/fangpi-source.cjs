@@ -9,6 +9,8 @@ const { URL } = require('node:url');
 const BASE = 'https://www.fangpi.net';
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 const TIMEOUT = 50000;
+// 免费下载的广告倒计时最长约 45s；封顶 60s，避免源站返回畸形 seconds 把应用挂死。
+const MAX_AD_WAIT_MS = 60000;
 
 class VerificationRequiredError extends Error {
   constructor(musicId, verifyUrl = `${BASE}/music/${encodeURIComponent(String(musicId))}`) {
@@ -78,8 +80,13 @@ function extractPlayUrl(jsonText) {
   throw new Error(data.msg || '无法获取播放地址');
 }
 
+// 只认 Cloudflare 拦截页的确凿标记。**不要**匹配 `cdn-cgi/challenge-platform` 这类信标——
+// 它在验证通过后的干净页里也常驻，匹配它会把"已放行"误判成"仍需验证"，造成解完验证又被拦回的死循环。
+// 权威信号其实是响应头 `cf-mitigated: challenge`（见 main.cjs 的 net 传输层），这里的 body 匹配仅作兜底。
 function isVerificationChallenge(html) {
-  return /Just a moment|challenges\.cloudflare\.com|cf-browser-verification|cf-challenge/i.test(String(html || ''));
+  return /Just a moment|Enable JavaScript and cookies|cf-browser-verification|cf-challenge-running|id="challenge-form"|_cf_chl_opt/i.test(
+    String(html || ''),
+  );
 }
 
 // ── HTTP（默认实现，测试可注入替换）─────────────────────
@@ -170,7 +177,31 @@ function downloadBinary(urlStr, destPath) {
   });
 }
 
-const defaultDeps = { httpGet, httpPost, downloadBinary };
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+const defaultDeps = { httpGet, httpPost, downloadBinary, wait };
+
+// 免费下载常需先过广告倒计时（非 VIP）。问 /api/ad-handle 拿到剩余秒数后自动等待，
+// 等满才去取播放地址。整段尽力而为：任何失败都不阻塞下载（与参考实现一致）。
+async function waitOutAdCountdown(musicId, adType, deps) {
+  const sleep = typeof deps.wait === 'function' ? deps.wait : wait;
+  try {
+    const raw = await deps.httpPost(`${BASE}/api/ad-handle`, {
+      mid: String(musicId),
+      m_type: adType || 1,
+      ignore_check_vip: 'false',
+    });
+    const res = JSON.parse(raw);
+    const seconds = Number(res && res.code === 4 && res.data && res.data.seconds);
+    if (Number.isFinite(seconds) && seconds > 0) {
+      await sleep(Math.min(seconds * 1000, MAX_AD_WAIT_MS));
+    }
+  } catch {
+    // ad-handle 失败（限速/畸形 JSON/网络）不影响继续取流
+  }
+}
 
 function withRequestHeaders(extraHeaders, deps = defaultDeps) {
   const headers = extraHeaders && typeof extraHeaders === 'object' ? extraHeaders : {};
@@ -216,6 +247,7 @@ async function resolvePlayUrl(musicId, deps = defaultDeps) {
   if (!appData) throw new Error('无法解析歌曲信息');
   if (appData.mp3_type === 1) throw new Error('付费歌曲，暂不支持');
   if (appData.should_verify) throw new VerificationRequiredError(musicId);
+  await waitOutAdCountdown(musicId, appData.ad_type, deps);
   const json = await deps.httpPost(`${BASE}/member/common-play-url`, { id: appData.play_id });
   let url = extractPlayUrl(json);
   if (url.includes('antiserver.kuwo.cn')) url = await convertKuwoUrl(url, deps);

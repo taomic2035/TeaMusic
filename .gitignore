@@ -27,3 +27,6 @@ Thumbs.db
 
 # Superpowers / agent workspace
 .superpowers/
+
+# Scratch / diagnostics
+tmp/

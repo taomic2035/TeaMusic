@@ -6,6 +6,7 @@ const fangpi = require('./fangpi-source.cjs') as {
   parseSongList(html: string): Array<{ id: string; title: string; artist: string }>;
   decodeAppData(html: string): Record<string, unknown> | null;
   sanitize(name: string): string;
+  isVerificationChallenge(html: string): boolean;
   extractPlayUrl(jsonText: string): string;
   resolvePlayUrl(musicId: string, deps: unknown): Promise<{ title: string; artist: string; url: string }>;
   downloadSong(musicId: string, outDir: string, deps: unknown): Promise<{ filePath: string; title: string; artist: string }>;
@@ -37,6 +38,23 @@ describe('fangpi-source pure helpers', () => {
     expect(data.mp3_type).toBe(0);
     const src = require('node:fs').readFileSync(require('node:path').join(__dirname, 'fangpi-source.cjs'), 'utf8');
     expect(src).not.toMatch(/\beval\s*\(/);
+  });
+
+  it('detects the Cloudflare interstitial but not a cleared page that still carries the jsd beacon', () => {
+    // 真·拦截页（"Just a moment" / "Enable JavaScript and cookies" / 挑战表单 / _cf_chl_opt）
+    expect(fangpi.isVerificationChallenge('<title>Just a moment...</title>')).toBe(true);
+    expect(fangpi.isVerificationChallenge('<p>Enable JavaScript and cookies to continue</p>')).toBe(true);
+    expect(fangpi.isVerificationChallenge('<form id="challenge-form" action="/cdn-cgi/...">')).toBe(true);
+    expect(fangpi.isVerificationChallenge('<script>window._cf_chl_opt={cvId:"3"}</script>')).toBe(true);
+    // 关键回归：CF 放行后的干净页仍会残留 challenge-platform 的 jsd 信标，绝不能误判为"仍在验证"，
+    // 否则解完验证的重试会被再次拦回，形成"验证不持久"的死循环。
+    expect(
+      fangpi.isVerificationChallenge(
+        '<a href="/music/7" title="晴天 - 周杰伦">晴天</a><script src="/cdn-cgi/challenge-platform/h/g/scripts/jsd/abc/main.js"></script>',
+      ),
+    ).toBe(false);
+    // 普通搜索结果页
+    expect(fangpi.isVerificationChallenge('<a href="/music/7" title="歌 - 手">晴天</a>')).toBe(false);
   });
 
   it('sanitizes filenames', () => {
@@ -116,6 +134,79 @@ describe('fangpi-source orchestration (injected http)', () => {
       code: 'VERIFY_REQUIRED',
       verifyUrl: 'https://www.fangpi.net/music/402856',
     });
+  });
+
+  it('waits out the ad-handle countdown before fetching the play url', async () => {
+    const page =
+      'window.appData = JSON.parse(\'{\\"mp3_title\\":\\"x\\",\\"mp3_author\\":\\"y\\",\\"play_id\\":\\"p\\",\\"mp3_type\\":0,\\"ad_type\\":2}\');';
+    const order: string[] = [];
+    let adBody: Record<string, unknown> | null = null;
+    let waitedMs = -1;
+    const deps = {
+      httpGet: async () => page,
+      httpPost: async (url: string, body: Record<string, unknown>) => {
+        if (url.includes('/api/ad-handle')) {
+          adBody = body;
+          order.push('ad');
+          return '{"code":4,"data":{"seconds":5}}';
+        }
+        order.push('play');
+        return '{"code":1,"data":{"url":"https://x/y.mp3"}}';
+      },
+      downloadBinary: async () => {},
+      wait: async (ms: number) => {
+        waitedMs = ms;
+        order.push('wait');
+      },
+    };
+
+    const result = await fangpi.resolvePlayUrl('402856', deps);
+
+    expect(adBody).toEqual({ mid: '402856', m_type: 2, ignore_check_vip: 'false' });
+    expect(waitedMs).toBe(5000);
+    expect(order).toEqual(['ad', 'wait', 'play']);
+    expect(result.url).toBe('https://x/y.mp3');
+  });
+
+  it('caps the ad-handle wait so a hostile countdown cannot hang the app', async () => {
+    const page =
+      'window.appData = JSON.parse(\'{\\"mp3_title\\":\\"x\\",\\"mp3_author\\":\\"y\\",\\"play_id\\":\\"p\\",\\"mp3_type\\":0}\');';
+    let waitedMs = -1;
+    const deps = {
+      httpGet: async () => page,
+      httpPost: async (url: string) =>
+        url.includes('/api/ad-handle') ? '{"code":4,"data":{"seconds":99999}}' : '{"code":1,"data":{"url":"https://x/y.mp3"}}',
+      downloadBinary: async () => {},
+      wait: async (ms: number) => {
+        waitedMs = ms;
+      },
+    };
+
+    await fangpi.resolvePlayUrl('1', deps);
+
+    expect(waitedMs).toBe(60000);
+  });
+
+  it('skips waiting when the ad-handle call fails or returns no countdown', async () => {
+    const page =
+      'window.appData = JSON.parse(\'{\\"mp3_title\\":\\"x\\",\\"mp3_author\\":\\"y\\",\\"play_id\\":\\"p\\",\\"mp3_type\\":0}\');';
+    let waited = false;
+    const deps = {
+      httpGet: async () => page,
+      httpPost: async (url: string) => {
+        if (url.includes('/api/ad-handle')) throw new Error('ad-handle 503');
+        return '{"code":1,"data":{"url":"https://x/y.mp3"}}';
+      },
+      downloadBinary: async () => {},
+      wait: async () => {
+        waited = true;
+      },
+    };
+
+    const result = await fangpi.resolvePlayUrl('1', deps);
+
+    expect(waited).toBe(false);
+    expect(result.url).toBe('https://x/y.mp3');
   });
 
   it('downloadSong writes file via injected downloadBinary', async () => {

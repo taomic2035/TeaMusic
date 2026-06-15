@@ -22,6 +22,7 @@ declare global {
         | { error: string; code?: 'VERIFY_REQUIRED'; verifyUrl?: string }
       >;
       openVerificationPage?(url: string): Promise<boolean>;
+      onVerificationNeeded?(callback: () => void): () => void;
     };
   }
 }

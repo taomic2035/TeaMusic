@@ -11,4 +11,9 @@ contextBridge.exposeInMainWorld('teaMusicBackend', {
   searchOnline: (query) => ipcRenderer.invoke('fangpi:search', query),
   downloadOnline: (musicId) => ipcRenderer.invoke('fangpi:download', musicId),
   openVerificationPage: (url) => ipcRenderer.invoke('fangpi:verify', url),
+  onVerificationNeeded: (callback) => {
+    const handler = () => callback();
+    ipcRenderer.on('fangpi:verification-needed', handler);
+    return () => ipcRenderer.removeListener('fangpi:verification-needed', handler);
+  },
 });
