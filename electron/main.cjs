@@ -9,8 +9,9 @@ const {
   readSidecarArtwork,
   readSidecarLyrics,
 } = require('./music-library.cjs');
-const { searchSongs, downloadSong, isVerificationChallenge, VerificationRequiredError } = require('./fangpi-source.cjs');
+const { searchSongs, downloadSong, resolveExternalDownloadPage, isVerificationChallenge, VerificationRequiredError } = require('./fangpi-source.cjs');
 const { ARCHIVE_ID_PREFIX, searchArchiveSongs, downloadArchiveSong } = require('./internet-archive-source.cjs');
+const { waitForBrowserDownload } = require('./browser-download-import.cjs');
 
 // 必须与验证窗口、worker 窗口三处一致。Cloudflare 把 cf_clearance 绑死在解题时的 UA 上。
 // 用不含 "Electron" 的普通 Chrome UA，且 Chrome 版本取真实 Chromium 版本——避免"UA 说 Chrome X，
@@ -539,7 +540,11 @@ function removeFromLocalLibrary(filePath) {
 }
 
 function resolvedLibraryPath() {
-  return path.join(app.getPath('music'), 'TeaMusic', 'Archive');
+  if (process.platform === 'win32') {
+    return path.join('D:\\Downloads', 'TeaMusic');
+  }
+
+  return path.join(app.getPath('music'), 'TeaMusic', 'Resolved');
 }
 
 function legacyResolvedLibraryPath() {
@@ -557,6 +562,22 @@ function normalizeFangpiUrl(rawUrl) {
   } catch {
     return null;
   }
+}
+
+async function downloadViaExternalBrowserPage(musicId, outputDir) {
+  const startedAtMs = Date.now();
+  const handoff = await resolveExternalDownloadPage(musicId, fangpiWorkerDeps);
+  fs.mkdirSync(outputDir, { recursive: true });
+  await shell.openExternal(handoff.url);
+  return await waitForBrowserDownload({
+    downloadsDir: app.getPath('downloads'),
+    outDir: outputDir,
+    title: handoff.title,
+    artist: handoff.artist,
+    startedAtMs,
+    timeoutMs: 300000,
+    pollMs: 1000,
+  });
 }
 
 ipcMain.handle('fangpi:search', async (_event, query) => {
@@ -616,7 +637,12 @@ ipcMain.handle('fangpi:download', async (_event, musicId) => {
       });
     }
 
-    return await downloadSong(id, outputDir, fangpiWorkerDeps);
+    try {
+      return await downloadSong(id, outputDir, fangpiWorkerDeps);
+    } catch (directError) {
+      flog('direct fangpi download failed, trying external browser handoff:', directError && directError.message);
+      return await downloadViaExternalBrowserPage(id, outputDir);
+    }
   } catch (error) {
     if (error && error.code === 'VERIFY_REQUIRED' && error.verifyUrl) {
       return { error: error.message, code: error.code, verifyUrl: error.verifyUrl };

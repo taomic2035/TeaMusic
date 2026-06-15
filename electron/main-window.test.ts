@@ -44,8 +44,10 @@ describe('Electron main window', () => {
     expect(preloadSource).not.toContain('resolveMissingTrack');
   });
 
-  it('archives new online downloads under a defined TeaMusic archive path', () => {
-    expect(mainSource).toContain("'TeaMusic', 'Archive'");
+  it('archives new online downloads under a defined TeaMusic download path', () => {
+    expect(mainSource).toContain("process.platform === 'win32'");
+    expect(mainSource).toContain("path.join('D:\\\\Downloads', 'TeaMusic')");
+    expect(mainSource).toContain("'TeaMusic', 'Resolved'");
     // 二进制下载走主进程 net（kuwo CDN 无 Cloudflare）。
     expect(mainSource).toContain('net.request');
   });
@@ -106,5 +108,13 @@ describe('Electron main window', () => {
     expect(mainSource).toContain('searchArchiveSongs');
     expect(mainSource).toContain('downloadArchiveSong');
     expect(mainSource).toContain('ARCHIVE_ID_PREFIX');
+  });
+
+  it('keeps Windows online downloads off the C drive and imports browser downloads', () => {
+    expect(mainSource).toContain("path.join('D:\\\\Downloads', 'TeaMusic')");
+    expect(mainSource).toContain("require('./browser-download-import.cjs')");
+    expect(mainSource).toContain('waitForBrowserDownload');
+    expect(mainSource).toContain('downloadViaExternalBrowserPage');
+    expect(mainSource).toContain('resolveExternalDownloadPage');
   });
 });

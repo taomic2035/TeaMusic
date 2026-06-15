@@ -8,7 +8,9 @@ const fangpi = require('./fangpi-source.cjs') as {
   sanitize(name: string): string;
   isVerificationChallenge(html: string): boolean;
   extractPlayUrl(jsonText: string): string;
+  extractDownloadPageUrl(html: string): string | null;
   resolvePlayUrl(musicId: string, deps: unknown): Promise<{ title: string; artist: string; url: string }>;
+  resolveExternalDownloadPage(musicId: string, deps: unknown): Promise<{ title: string; artist: string; url: string }>;
   downloadSong(musicId: string, outDir: string, deps: unknown): Promise<{ filePath: string; title: string; artist: string }>;
   searchSongs(keyword: string, deps?: unknown): Promise<Array<{ id: string; title: string; artist: string }>>;
   withRequestHeaders(extraHeaders: Record<string, string>, deps: unknown): unknown;
@@ -66,6 +68,13 @@ describe('fangpi-source pure helpers', () => {
     expect(fangpi.extractPlayUrl('{"code":1,"data":{"url":"https://x/y.mp3"}}')).toBe('https://x/y.mp3');
     expect(() => fangpi.extractPlayUrl('{"code":0,"msg":"页面已被删除"}')).toThrow('页面已被删除');
   });
+  it('extracts an external download page from detail html', () => {
+    expect(fangpi.extractDownloadPageUrl('<a href="/dp/aHR0cHM6Ly9wYW4ucXVhcmsuY24vcy9kMDZj">download</a>')).toBe(
+      'https://www.fangpi.net/dp/aHR0cHM6Ly9wYW4ucXVhcmsuY24vcy9kMDZj',
+    );
+    expect(fangpi.extractDownloadPageUrl('<a href="/music/1">play</a>')).toBeNull();
+  });
+
   it('wraps page requests with verification cookies without changing binary downloads', async () => {
     const calls: Array<{ type: string; headers?: Record<string, string> }> = [];
     const deps = {
@@ -104,6 +113,21 @@ describe('fangpi-source pure helpers', () => {
     await expect(fangpi.searchSongs('晴天', deps)).rejects.toMatchObject({
       code: 'VERIFY_REQUIRED',
       verifyUrl: 'https://www.fangpi.net/s/%E6%99%B4%E5%A4%A9',
+    });
+  });
+});
+
+describe('fangpi-source external download handoff', () => {
+  it('resolves a quark-style external download page from detail metadata', async () => {
+    const page =
+      'window.appData = JSON.parse(\'{\\"mp3_title\\":\\"\\u6cf8\\u6cbd\\u6e56\\",\\"mp3_author\\":\\"\\u9ebb\\u56ed\\u8bd7\\u4eba\\",\\"play_id\\":\\"p\\",\\"mp3_type\\":0}\');' +
+      '<a href="/dp/aHR0cHM6Ly9wYW4ucXVhcmsuY24vcy9kMDZj">download</a>';
+    const deps = { httpGet: async () => page, httpPost: async () => '', downloadBinary: async () => {} };
+
+    await expect(fangpi.resolveExternalDownloadPage('11631430', deps)).resolves.toEqual({
+      title: '泸沽湖',
+      artist: '麻园诗人',
+      url: 'https://www.fangpi.net/dp/aHR0cHM6Ly9wYW4ucXVhcmsuY24vcy9kMDZj',
     });
   });
 });

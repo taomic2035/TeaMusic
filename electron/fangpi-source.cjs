@@ -9,19 +9,17 @@ const { URL } = require('node:url');
 const BASE = 'https://www.fangpi.net';
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 const TIMEOUT = 50000;
-// 免费下载的广告倒计时最长约 45s；封顶 60s，避免源站返回畸形 seconds 把应用挂死。
 const MAX_AD_WAIT_MS = 60000;
 
 class VerificationRequiredError extends Error {
   constructor(musicId, verifyUrl = `${BASE}/music/${encodeURIComponent(String(musicId))}`) {
-    super('需要真人检测，打开验证页面后再重试下载');
+    super('\u9700\u8981\u771f\u4eba\u68c0\u6d4b\uff0c\u6253\u5f00\u9a8c\u8bc1\u9875\u9762\u540e\u518d\u91cd\u8bd5\u4e0b\u8f7d');
     this.name = 'VerificationRequiredError';
     this.code = 'VERIFY_REQUIRED';
     this.verifyUrl = verifyUrl;
   }
 }
 
-// ── 纯函数 ───────────────────────────────────────────────
 function parseSongList(html) {
   const re = /href="\/music\/(\d+)"[^>]*title="([^"]+)"/g;
   const seen = new Set();
@@ -38,8 +36,6 @@ function parseSongList(html) {
   return songs;
 }
 
-// 把单引号 JS 字符串字面量主体解码为真实字符串（等价于旧版 eval 的效果，但不执行代码），
-// 结果即 JSON.parse 的入参文本。
 function unescapeJsString(s) {
   return s.replace(/\\(u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|.)/g, (_, g) => {
     if (g[0] === 'u' || g[0] === 'x') return String.fromCharCode(parseInt(g.slice(1), 16));
@@ -51,13 +47,13 @@ function unescapeJsString(s) {
       case 'f': return '\f';
       case 'v': return '\v';
       case '0': return '\0';
-      default: return g; // \\ \' \" \/ → 该字符本身
+      default: return g;
     }
   });
 }
 
 function decodeAppData(html) {
-  const m = html.match(/window\.appData\s*=\s*JSON\.parse\('([\s\S]+?)'\)\s*;/);
+  const m = String(html || '').match(/window\.appData\s*=\s*JSON\.parse\('([\s\S]+?)'\)\s*;/);
   if (!m) return null;
   try {
     return JSON.parse(unescapeJsString(m[1]));
@@ -77,26 +73,34 @@ function sanitize(name) {
 function extractPlayUrl(jsonText) {
   const data = JSON.parse(jsonText);
   if (data.code === 1 && data.data && data.data.url) return data.data.url;
-  throw new Error(data.msg || '无法获取播放地址');
+  throw new Error(data.msg || '\u65e0\u6cd5\u83b7\u53d6\u64ad\u653e\u5730\u5740');
 }
 
-// 只认 Cloudflare 拦截页的确凿标记。**不要**匹配 `cdn-cgi/challenge-platform` 这类信标——
-// 它在验证通过后的干净页里也常驻，匹配它会把"已放行"误判成"仍需验证"，造成解完验证又被拦回的死循环。
-// 权威信号其实是响应头 `cf-mitigated: challenge`（见 main.cjs 的 net 传输层），这里的 body 匹配仅作兜底。
+function extractDownloadPageUrl(html) {
+  const match = String(html || '').match(/href=["'](\/dp\/[^"']+)["']/i);
+  if (!match) return null;
+  return new URL(match[1], BASE).href;
+}
+
 function isVerificationChallenge(html) {
   return /Just a moment|Enable JavaScript and cookies|cf-browser-verification|cf-challenge-running|id="challenge-form"|_cf_chl_opt/i.test(
     String(html || ''),
   );
 }
 
-// ── HTTP（默认实现，测试可注入替换）─────────────────────
 function httpGet(urlStr, extraHeaders = {}) {
   return new Promise((resolve, reject) => {
     const doReq = (u) => {
       const p = new URL(u);
       const lib = p.protocol === 'http:' ? http : https;
       const req = lib.request(
-        { hostname: p.hostname, path: p.pathname + p.search, method: 'GET', headers: { 'User-Agent': UA, Referer: BASE, ...extraHeaders }, timeout: TIMEOUT },
+        {
+          hostname: p.hostname,
+          path: p.pathname + p.search,
+          method: 'GET',
+          headers: { 'User-Agent': UA, Referer: BASE, ...extraHeaders },
+          timeout: TIMEOUT,
+        },
         (res) => {
           if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
             res.resume();
@@ -109,7 +113,10 @@ function httpGet(urlStr, extraHeaders = {}) {
         },
       );
       req.on('error', reject);
-      req.on('timeout', () => { req.destroy(); reject(new Error('请求超时')); });
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('\u8bf7\u6c42\u8d85\u65f6'));
+      });
       req.end();
     };
     doReq(urlStr);
@@ -123,8 +130,17 @@ function httpPost(urlStr, data, extraHeaders = {}) {
     const lib = p.protocol === 'http:' ? http : https;
     const req = lib.request(
       {
-        hostname: p.hostname, path: p.pathname + p.search, method: 'POST',
-        headers: { 'User-Agent': UA, Referer: BASE, 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body), 'X-Requested-With': 'XMLHttpRequest', ...extraHeaders },
+        hostname: p.hostname,
+        path: p.pathname + p.search,
+        method: 'POST',
+        headers: {
+          'User-Agent': UA,
+          Referer: BASE,
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Length': Buffer.byteLength(body),
+          'X-Requested-With': 'XMLHttpRequest',
+          ...extraHeaders,
+        },
         timeout: TIMEOUT,
       },
       (res) => {
@@ -135,7 +151,10 @@ function httpPost(urlStr, data, extraHeaders = {}) {
       },
     );
     req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('请求超时')); });
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('\u8bf7\u6c42\u8d85\u65f6'));
+    });
     req.write(body);
     req.end();
   });
@@ -145,7 +164,7 @@ function downloadBinary(urlStr, destPath) {
   return new Promise((resolve, reject) => {
     const tmp = destPath + '.tmp';
     const doReq = (u, redirectCount = 0) => {
-      if (redirectCount > 5) return reject(new Error('重定向过多'));
+      if (redirectCount > 5) return reject(new Error('\u91cd\u5b9a\u5411\u8fc7\u591a'));
       const p = new URL(u);
       const lib = p.protocol === 'http:' ? http : https;
       const req = lib.request(
@@ -155,22 +174,35 @@ function downloadBinary(urlStr, destPath) {
             res.resume();
             return doReq(new URL(res.headers.location, u).href, redirectCount + 1);
           }
-          if (res.statusCode !== 200) { res.resume(); return reject(new Error(`HTTP ${res.statusCode}`)); }
+          if (res.statusCode !== 200) {
+            res.resume();
+            return reject(new Error(`HTTP ${res.statusCode}`));
+          }
           const ws = fs.createWriteStream(tmp);
           res.pipe(ws);
           ws.on('finish', () => {
             ws.close(() => {
-              try { fs.renameSync(tmp, destPath); }
-              catch { fs.copyFileSync(tmp, destPath); fs.unlinkSync(tmp); }
+              try {
+                fs.renameSync(tmp, destPath);
+              } catch {
+                fs.copyFileSync(tmp, destPath);
+                fs.unlinkSync(tmp);
+              }
               resolve();
             });
           });
           ws.on('error', reject);
-          res.on('error', (e) => { ws.destroy(); reject(e); });
+          res.on('error', (e) => {
+            ws.destroy();
+            reject(e);
+          });
         },
       );
       req.on('error', reject);
-      req.on('timeout', () => { req.destroy(); reject(new Error('下载超时')); });
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('\u4e0b\u8f7d\u8d85\u65f6'));
+      });
       req.end();
     };
     doReq(urlStr);
@@ -183,8 +215,6 @@ function wait(ms) {
 
 const defaultDeps = { httpGet, httpPost, downloadBinary, wait };
 
-// 免费下载常需先过广告倒计时（非 VIP）。问 /api/ad-handle 拿到剩余秒数后自动等待，
-// 等满才去取播放地址。整段尽力而为：任何失败都不阻塞下载（与参考实现一致）。
 async function waitOutAdCountdown(musicId, adType, deps) {
   const sleep = typeof deps.wait === 'function' ? deps.wait : wait;
   try {
@@ -199,7 +229,7 @@ async function waitOutAdCountdown(musicId, adType, deps) {
       await sleep(Math.min(seconds * 1000, MAX_AD_WAIT_MS));
     }
   } catch {
-    // ad-handle 失败（限速/畸形 JSON/网络）不影响继续取流
+    // Best effort only.
   }
 }
 
@@ -213,7 +243,6 @@ function withRequestHeaders(extraHeaders, deps = defaultDeps) {
   };
 }
 
-// ── kuwo antiserver 链接转换 ─────────────────────────────
 async function convertKuwoUrl(origUrl, deps) {
   try {
     const u = new URL(origUrl);
@@ -229,11 +258,12 @@ async function convertKuwoUrl(origUrl, deps) {
   return origUrl;
 }
 
-// ── 编排函数 ─────────────────────────────────────────────
 async function searchSongs(keyword, deps = defaultDeps) {
   const kw = String(keyword || '').trim();
   if (!kw) return [];
-  try { await deps.httpPost(`${BASE}/api/s`, { keyword: kw }); } catch {}
+  try {
+    await deps.httpPost(`${BASE}/api/s`, { keyword: kw });
+  } catch {}
   const html = await deps.httpGet(`${BASE}/s/${encodeURIComponent(kw)}`);
   if (isVerificationChallenge(html)) {
     throw new VerificationRequiredError(kw, `${BASE}/s/${encodeURIComponent(kw)}`);
@@ -244,13 +274,24 @@ async function searchSongs(keyword, deps = defaultDeps) {
 async function resolvePlayUrl(musicId, deps = defaultDeps) {
   const html = await deps.httpGet(`${BASE}/music/${musicId}`);
   const appData = decodeAppData(html);
-  if (!appData) throw new Error('无法解析歌曲信息');
-  if (appData.mp3_type === 1) throw new Error('付费歌曲，暂不支持');
+  if (!appData) throw new Error('\u65e0\u6cd5\u89e3\u6790\u6b4c\u66f2\u4fe1\u606f');
+  if (appData.mp3_type === 1) throw new Error('\u4ed8\u8d39\u6b4c\u66f2\uff0c\u6682\u4e0d\u652f\u6301');
   if (appData.should_verify) throw new VerificationRequiredError(musicId);
   await waitOutAdCountdown(musicId, appData.ad_type, deps);
   const json = await deps.httpPost(`${BASE}/member/common-play-url`, { id: appData.play_id });
   let url = extractPlayUrl(json);
   if (url.includes('antiserver.kuwo.cn')) url = await convertKuwoUrl(url, deps);
+  return { title: appData.mp3_title, artist: appData.mp3_author, url };
+}
+
+async function resolveExternalDownloadPage(musicId, deps = defaultDeps) {
+  const html = await deps.httpGet(`${BASE}/music/${musicId}`);
+  const appData = decodeAppData(html);
+  if (!appData) throw new Error('\u65e0\u6cd5\u89e3\u6790\u6b4c\u66f2\u4fe1\u606f');
+  if (appData.mp3_type === 1) throw new Error('\u4ed8\u8d39\u6b4c\u66f2\uff0c\u6682\u4e0d\u652f\u6301');
+  if (appData.should_verify) throw new VerificationRequiredError(musicId);
+  const url = extractDownloadPageUrl(html);
+  if (!url) throw new Error('No external download page found');
   return { title: appData.mp3_title, artist: appData.mp3_author, url };
 }
 
@@ -269,9 +310,11 @@ module.exports = {
   decodeAppData,
   sanitize,
   extractPlayUrl,
+  extractDownloadPageUrl,
   isVerificationChallenge,
   searchSongs,
   resolvePlayUrl,
+  resolveExternalDownloadPage,
   downloadSong,
   withRequestHeaders,
   VerificationRequiredError,
