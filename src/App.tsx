@@ -26,7 +26,7 @@ import {
 import { useDominantTheme } from './hooks/useDominantTheme';
 
 type PlaybackMode = 'queue' | 'repeat-one' | 'shuffle';
-type FinderSong = { id: string; title: string; artist: string };
+type FinderSong = { id: string; title: string; artist: string; source?: string };
 type FinderVerification = {
   type: 'search' | 'download';
   songId?: string;
@@ -1230,7 +1230,7 @@ export function App() {
                 <li key={song.id}>
                   <div className="finder-meta">
                     <span className="finder-title">{song.title}</span>
-                    <span className="finder-artist">{song.artist}</span>
+                    <span className="finder-artist">{song.source ? `${song.artist} · ${song.source}` : song.artist}</span>
                   </div>
                   {downloadingIds.has(song.id) ? (
                     <span aria-label="下载中" className="finder-dl downloading">

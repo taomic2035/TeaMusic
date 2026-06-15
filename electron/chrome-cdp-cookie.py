@@ -4,23 +4,11 @@ Usage:
   python chrome-cdp-cookie.py get-cookie [port]
   python chrome-cdp-cookie.py navigate <url> [port]
   python chrome-cdp-cookie.py get-html [port]
-  python chrome-cdp-cookie.py fetch <url> <method> [port]
-  python chrome-cdp-cookie.py launch <url> [port]
+  python chrome-cdp-cookie.py fetch <url> <method> [body] [port]
   python chrome-cdp-cookie.py check [port]
 """
-import json, sys, subprocess, os, time
+import json, sys
 import websocket
-
-def find_chrome():
-    paths = [
-        os.path.join(os.environ.get("PROGRAMFILES", ""), "Google", "Chrome", "Application", "chrome.exe"),
-        os.path.join(os.environ.get("PROGRAMFILES(X86)", ""), "Google", "Chrome", "Application", "chrome.exe"),
-        os.path.join(os.environ.get("LOCALAPPDATA", ""), "Google", "Chrome", "Application", "chrome.exe"),
-    ]
-    for p in paths:
-        if os.path.exists(p):
-            return p
-    return None
 
 def get_page_ws_url(port):
     import urllib.request
@@ -116,36 +104,6 @@ def cdp_fetch(port, url, method="GET", body=None):
     else:
         print("FETCH_ERROR")
 
-def launch_chrome(url, port):
-    chrome = find_chrome()
-    if not chrome:
-        print("NO_CHROME")
-        return
-
-    cdp_profile_dir = os.path.join(os.environ.get("TEMP", ""), "teamusic-chrome-cdp")
-    os.makedirs(cdp_profile_dir, exist_ok=True)
-
-    subprocess.Popen([
-        chrome,
-        f"--remote-debugging-port={port}",
-        f"--user-data-dir={cdp_profile_dir}",
-        "--remote-allow-origins=*",
-        "--no-first-run",
-        "--no-default-browser-check",
-        url
-    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-    import urllib.request
-    for _ in range(30):
-        time.sleep(1)
-        try:
-            with urllib.request.urlopen(f"http://127.0.0.1:{port}/json/version", timeout=2) as resp:
-                print("LAUNCHED")
-                return
-        except Exception:
-            continue
-    print("LAUNCH_TIMEOUT")
-
 def check_cdp(port):
     import urllib.request
     try:
@@ -156,7 +114,7 @@ def check_cdp(port):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: chrome-cdp-cookie.py <get-cookie|navigate|get-html|fetch|launch|check> [args]")
+        print("Usage: chrome-cdp-cookie.py <get-cookie|navigate|get-html|fetch|check> [args]")
         sys.exit(1)
 
     action = sys.argv[1]
@@ -172,10 +130,8 @@ if __name__ == "__main__":
     elif action == "fetch":
         url = sys.argv[2] if len(sys.argv) > 2 else ""
         method = sys.argv[3] if len(sys.argv) > 3 else "GET"
-        cdp_fetch(port, url, method)
-    elif action == "launch":
-        url = sys.argv[2] if len(sys.argv) > 2 else "about:blank"
-        launch_chrome(url, port)
+        body = sys.argv[4] if len(sys.argv) > 5 else None
+        cdp_fetch(port, url, method, body)
     elif action == "check":
         check_cdp(port)
     else:

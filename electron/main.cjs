@@ -1,7 +1,7 @@
 const { app, BrowserWindow, dialog, ipcMain, shell, session, net } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
-const { execSync } = require('node:child_process');
+const { execFile, execSync } = require('node:child_process');
 const {
   audioExtensionPattern,
   collectAudioFilesFromSelection,
@@ -10,6 +10,7 @@ const {
   readSidecarLyrics,
 } = require('./music-library.cjs');
 const { searchSongs, downloadSong, isVerificationChallenge, VerificationRequiredError } = require('./fangpi-source.cjs');
+const { ARCHIVE_ID_PREFIX, searchArchiveSongs, downloadArchiveSong } = require('./internet-archive-source.cjs');
 
 // 必须与验证窗口、worker 窗口三处一致。Cloudflare 把 cf_clearance 绑死在解题时的 UA 上。
 // 用不含 "Electron" 的普通 Chrome UA，且 Chrome 版本取真实 Chromium 版本——避免"UA 说 Chrome X，
@@ -92,38 +93,6 @@ function extractChromeCfClearance() {
   }
 }
 
-// 用 CDP 启动独立 Chrome 实例（带远程调试端口）
-// 用独立的 user-data-dir 避免与已运行的 Chrome 冲突
-function launchChromeWithCDP(url) {
-  const chromePaths = [
-    path.join(process.env.PROGRAMFILES || '', 'Google', 'Chrome', 'Application', 'chrome.exe'),
-    path.join(process.env['PROGRAMFILES(X86)'] || '', 'Google', 'Chrome', 'Application', 'chrome.exe'),
-    path.join(process.env.LOCALAPPDATA || '', 'Google', 'Chrome', 'Application', 'chrome.exe'),
-  ];
-  const chromeExe = chromePaths.find((p) => fs.existsSync(p));
-  if (!chromeExe) {
-    flog('  Chrome not found');
-    return false;
-  }
-
-  // 使用独立的 user-data-dir，这样不会和已运行的 Chrome 冲突
-  const cdpProfileDir = path.join(app.getPath('temp'), 'teamusic-chrome-cdp');
-  fs.mkdirSync(cdpProfileDir, { recursive: true });
-
-  const { spawn } = require('node:child_process');
-  flog('  launching independent Chrome with CDP on port', CDP_PORT);
-  const proc = spawn(chromeExe, [
-    `--remote-debugging-port=${CDP_PORT}`,
-    `--user-data-dir=${cdpProfileDir}`,
-    '--remote-allow-origins=*',
-    '--no-first-run',
-    '--no-default-browser-check',
-    url,
-  ], { detached: true, stdio: 'ignore' });
-  proc.unref();
-  return true;
-}
-
 // 检查 Chrome CDP 是否可用
 function isChromeCDPAvailable() {
   try {
@@ -137,11 +106,22 @@ function isChromeCDPAvailable() {
   }
 }
 
+async function openExistingChromeVerification(url) {
+  if (isChromeCDPAvailable()) {
+    flog('  navigating existing Chrome CDP on port', CDP_PORT);
+    await navigateChromeCDPAsync(url);
+    return 'cdp';
+  }
+
+  flog('  Chrome CDP unavailable; opening verification URL in existing default browser');
+  await shell.openExternal(url);
+  return 'external';
+}
+
 // 通过 CDP 让 Chrome 导航到指定 URL（异步，不阻塞事件循环）
 function navigateChromeCDPAsync(url) {
   return new Promise((resolve) => {
-    const { exec } = require('node:child_process');
-    exec(`python "${CHROME_CDP_SCRIPT}" navigate "${url}" ${CDP_PORT}`, { timeout: 15000 }, (err) => {
+    execFile('python', [CHROME_CDP_SCRIPT, 'navigate', url, String(CDP_PORT)], { timeout: 15000 }, (err) => {
       if (err) flog('  Chrome CDP navigate failed:', err.message);
       resolve(!err);
     });
@@ -151,8 +131,7 @@ function navigateChromeCDPAsync(url) {
 // 通过 CDP 从 Chrome 获取当前页面 HTML 内容（异步，不阻塞事件循环）
 function getCdpPageContentAsync() {
   return new Promise((resolve) => {
-    const { exec } = require('node:child_process');
-    exec(`python "${CHROME_CDP_SCRIPT}" get-html ${CDP_PORT}`, { timeout: 15000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
+    execFile('python', [CHROME_CDP_SCRIPT, 'get-html', String(CDP_PORT)], { timeout: 15000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
       if (err) {
         flog('  Chrome CDP get-html failed:', err.message);
         resolve(null);
@@ -171,8 +150,7 @@ function getCdpPageContentAsync() {
 // 通过 CDP 在 Chrome 页面内执行 fetch（异步，不阻塞事件循环）
 function cdpFetchAsync(url, method, body) {
   return new Promise((resolve) => {
-    const { exec } = require('node:child_process');
-    exec(`python "${CHROME_CDP_SCRIPT}" fetch "${url}" ${method} ${CDP_PORT}`, { timeout: FANGPI_TIMEOUT, maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
+    execFile('python', [CHROME_CDP_SCRIPT, 'fetch', url, method, body || '', String(CDP_PORT)], { timeout: FANGPI_TIMEOUT, maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
       if (err) {
         flog('  Chrome CDP fetch failed:', err.message);
         resolve(null);
@@ -320,14 +298,7 @@ function workerGet(url) {
         await session.defaultSession.cookies.remove('https://www.fangpi.net', 'cf_clearance');
       }
 
-      // 用 Chrome CDP 做验证
-      flog('  opening Chrome with CDP for verification...');
-      if (!isChromeCDPAvailable()) {
-        flog('  Chrome CDP not available, launching Chrome with debugging port...');
-        launchChromeWithCDP(url);
-      } else {
-        await navigateChromeCDPAsync(url);
-      }
+      const verificationMode = await openExistingChromeVerification(url);
 
       // 通知渲染进程
       BrowserWindow.getAllWindows().forEach((w) => {
@@ -345,11 +316,24 @@ function workerGet(url) {
         await new Promise((r) => setTimeout(r, POLL_INTERVAL));
 
         flog(`  polling Chrome CDP... (${i}/${MAX_POLL})`);
-        const cdpResult = await getCdpPageContentAsync();
-        if (cdpResult && !isVerificationChallenge(cdpResult)) {
-          flog('  Chrome page loaded successfully! len:', cdpResult.length);
-          pageContent = cdpResult;
-          break;
+        if (verificationMode === 'cdp') {
+          const cdpResult = await getCdpPageContentAsync();
+          if (cdpResult && !isVerificationChallenge(cdpResult)) {
+            flog('  Chrome page loaded successfully! len:', cdpResult.length);
+            pageContent = cdpResult;
+            break;
+          }
+        } else {
+          try {
+            const retry = await workerLoad(worker, url);
+            if (retry.status === 200 && !isVerificationChallenge(retry.html)) {
+              flog('  Electron worker accepted after existing Chrome verification; len:', retry.html.length);
+              pageContent = retry.html;
+              break;
+            }
+          } catch (error) {
+            flog('  worker retry after external Chrome verification failed:', error && error.message);
+          }
         }
 
         if (i % 6 === 0) {
@@ -362,16 +346,16 @@ function workerGet(url) {
         throw new VerificationRequiredError(null, url);
       }
 
-      // 标记 CDP 已验证，后续请求直接走 CDP
-      chromeCdpVerified = true;
+      chromeCdpVerified = verificationMode === 'cdp';
 
-      // 注入 cf_clearance 到 Electron session 作为备用
-      const cookieInfo = extractChromeCfClearance();
-      if (cookieInfo) {
-        try {
-          await injectCfClearance(cookieInfo);
-          flog('  cf_clearance injected into Electron session as backup');
-        } catch { /* ignore */ }
+      if (verificationMode === 'cdp') {
+        const cookieInfo = extractChromeCfClearance();
+        if (cookieInfo) {
+          try {
+            await injectCfClearance(cookieInfo);
+            flog('  cf_clearance injected into Electron session as backup');
+          } catch { /* ignore */ }
+        }
       }
 
       return pageContent;
@@ -582,15 +566,36 @@ ipcMain.handle('fangpi:search', async (_event, query) => {
     return [];
   }
 
+  let fangpiVerification = null;
+  let fangpiResults = [];
+  let archiveResults = [];
+
   try {
-    return await searchSongs(normalizedQuery, fangpiWorkerDeps);
+    fangpiResults = await searchSongs(normalizedQuery, fangpiWorkerDeps);
   } catch (error) {
     if (error && error.code === 'VERIFY_REQUIRED' && error.verifyUrl) {
-      return { error: error.message, code: error.code, verifyUrl: error.verifyUrl };
+      fangpiVerification = { error: error.message, code: error.code, verifyUrl: error.verifyUrl };
+    } else {
+      flog('fangpi search failed:', error && error.message);
     }
-
-    return [];
   }
+
+  try {
+    archiveResults = await searchArchiveSongs(normalizedQuery);
+  } catch (error) {
+    flog('archive search failed:', error && error.message);
+  }
+
+  const combinedResults = [...fangpiResults, ...archiveResults];
+  if (combinedResults.length > 0) {
+    return combinedResults;
+  }
+
+  if (fangpiVerification) {
+    return fangpiVerification;
+  }
+
+  return [];
 });
 
 ipcMain.handle('fangpi:download', async (_event, musicId) => {
@@ -604,6 +609,13 @@ ipcMain.handle('fangpi:download', async (_event, musicId) => {
   fs.mkdirSync(outputDir, { recursive: true });
 
   try {
+    if (id.startsWith(ARCHIVE_ID_PREFIX)) {
+      return await downloadArchiveSong(id, outputDir, {
+        httpGet: (url) => workerGet(url),
+        downloadBinary: (url, destPath) => netDownload(url, destPath),
+      });
+    }
+
     return await downloadSong(id, outputDir, fangpiWorkerDeps);
   } catch (error) {
     if (error && error.code === 'VERIFY_REQUIRED' && error.verifyUrl) {

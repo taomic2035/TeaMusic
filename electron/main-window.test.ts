@@ -91,4 +91,20 @@ describe('Electron main window', () => {
     expect(mainSource).toMatch(/status === 403 \|\| status === 503/);
     expect(mainSource).toContain('isVerificationChallenge');
   });
+
+  it('uses the existing Chrome session for verification instead of launching a separate Chrome profile', () => {
+    expect(mainSource).toContain('openExistingChromeVerification');
+    expect(mainSource).toContain('shell.openExternal');
+    expect(mainSource).not.toContain('launchChromeWithCDP');
+    expect(mainSource).not.toContain('--user-data-dir');
+    expect(mainSource).not.toContain('--remote-debugging-port');
+    expect(mainSource).not.toContain('spawn(chromeExe');
+  });
+
+  it('includes Internet Archive as a legal fallback source for downloadable audio', () => {
+    expect(mainSource).toContain("require('./internet-archive-source.cjs')");
+    expect(mainSource).toContain('searchArchiveSongs');
+    expect(mainSource).toContain('downloadArchiveSong');
+    expect(mainSource).toContain('ARCHIVE_ID_PREFIX');
+  });
 });
